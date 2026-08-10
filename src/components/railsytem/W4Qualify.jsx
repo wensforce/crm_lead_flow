@@ -222,6 +222,11 @@ const W4Qualify = ({
       setPurchasePotential(leadRecord.Priority)
     }
 
+    console.log('leadRecord.Customer_confirmed_deck', leadRecord)
+    if (leadRecord.Customer_confirmed_deck) {
+      setIsCatalogConfirmedOnCall(toBooleanFlag(leadRecord.Customer_confirmed_deck))
+    }
+
     const openPackage = toBooleanFlag(leadRecord.Open_Package_Estimation)
     const savedPct = openPackage
       ? leadRecord.Estimate_Package_Percentage
@@ -318,9 +323,12 @@ const W4Qualify = ({
           : '',
       Decision_Timeline: timeline,
       Priority: purchasePotential,
+      Customer_confirmed_deck: JSON.stringify(isCatalogConfirmedOnCall),
       Estimate_Deadline_At: formatZohoDateTime(new Date(Date.now() + 15 * 60 * 1000)),
       Rail_Stage: '7',
     }
+
+    console.log('payload', payload)
 
     if (isOpenPackageEstimation) {
       payload = {
