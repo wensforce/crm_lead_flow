@@ -6,7 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [tailwindcss(), react()],
   server: {
-    allowedHosts: ["helpless-customize-smashup.ngrok-free.dev"],
+    allowedHosts: ["crm-lead-flow-theta.vercel.app"],
     // or, less strict but fine for local dev: allowedHosts: true
   },
 });
