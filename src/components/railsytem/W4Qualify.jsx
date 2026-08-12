@@ -330,6 +330,10 @@ const W4Qualify = ({
       Customer_confirmed_deck: JSON.stringify(isCatalogConfirmedOnCall),
       Estimate_Deadline_At: formatZohoDateTime(new Date(Date.now() + 15 * 60 * 1000)),
       Estimation_Approval_Send: true,
+      Estimation_Sent: true,
+      Estimate_DeadlineAt: formatZohoDateTime(new Date(Date.now() + 15 * 60 * 1000)),
+      Estimation_Sent_At: formatZohoDateTime(new Date()),
+      ApprovalStatus: 'Pending',
       Rail_Stage: '7',
       Lead_Status: "Agent Sent Estimate",
     }
@@ -347,11 +351,6 @@ const W4Qualify = ({
     } else {
       payload = {
         ...payload,
-        Estimation_Sent: true,
-        Estimate_DeadlineAt: formatZohoDateTime(new Date(Date.now() + 15 * 60 * 1000)),
-        Estimation_Sent_At: formatZohoDateTime(new Date()),
-        Estimation_Approval_Send: true,
-        ApprovalStatus: 'Pending',
         Estimation_Range_Start: pricingSummary.startPrice,
         Estimation_Range_End: budgetBand.rawEnd,
         Estimation_Percentage: crmBookingPercentage,
