@@ -1277,7 +1277,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                             <input
                               disabled
                               className="ui-input h-11 cursor-not-allowed opacity-60"
-                              value={item.selling}
+                              value={ item.photoSent ? item.selling : "X.XX"}
                               readOnly
                             />
                           </label>
@@ -1287,7 +1287,8 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                             </span>
                             <input
                               className="ui-input h-11"
-                              value={item.margin}
+                              disabled={!item.photoSent}
+                              value={ item.photoSent ? item.margin : "X.XX"}
                               onChange={(e) =>
                                 updateItem(item.id, "margin", e.target.value)
                               }
@@ -1342,7 +1343,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                                   <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
                                     Quote Price
                                   </p>
-                                  <p className="mt-0.5 text-xs text-muted-foreground">
+                                  { item.photoSent ? <p className="mt-0.5 text-xs text-muted-foreground">
                                     ₹
                                     {Number(item.selling).toLocaleString("en-IN")}{" "}
                                     base
@@ -1355,10 +1356,14 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                                       Effective ₹{effective.toLocaleString("en-IN")}
                                     </span>
                                     {' × (1 + '}{item.margin}{')'}
-                                  </p>
+                                  </p> 
+                                  : <p className="mt-0.5 text-xs text-muted-foreground">
+                                    Please send photo to get the quote price
+                                  </p>}
                                 </div>
                                 <span className="text-2xl font-bold text-primary">
-                                  ₹{quote.toLocaleString("en-IN")}
+                                  { item.photoSent ? `₹${Number(quote).toLocaleString("en-IN")}`
+                                  : `₹X.XX`}
                                 </span>
                               </div>
                             </div>
@@ -1578,7 +1583,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                           <input
                             disabled
                             className="ui-input h-11 cursor-not-allowed opacity-60"
-                            value={item.selling}
+                            value={ item.photoSent ? item.selling : "X.XX"}
                             readOnly
                           />
                         </label>
@@ -1588,7 +1593,8 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                           </span>
                           <input
                             className="ui-input h-11"
-                            value={item.margin}
+                            disabled={!item.photoSent}
+                            value={ item.photoSent ? item.margin : "X.XX"}
                             onChange={(e) =>
                               updateItem(item.id, "margin", e.target.value)
                             }
@@ -1616,7 +1622,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                                 <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
                                   Quote Price
                                 </p>
-                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                { item.photoSent ? <p className="mt-0.5 text-xs text-muted-foreground">
                                   ₹{Number(item.selling).toLocaleString("en-IN")}{" "}
                                   base
                                   {multiplier !== 1 &&
@@ -1627,9 +1633,13 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                                   </span>
                                   {' × (1 + '}{item.margin}{')'}
                                 </p>
+                                : <p className="mt-0.5 text-xs text-muted-foreground">
+                                  Please send photo to get the quote price
+                                </p>}
                               </div>
                               <span className="text-2xl font-bold text-primary">
-                                ₹{quote.toLocaleString("en-IN")}
+                                { item.photoSent ? `₹${Number(quote).toLocaleString("en-IN")}`
+                                : `₹X.XX`}
                               </span>
                             </div>
                           </div>

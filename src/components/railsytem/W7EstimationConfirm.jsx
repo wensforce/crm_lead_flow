@@ -584,6 +584,16 @@ const EstimationConfirm = ({
 
     setIsSendingEstimate(true);
 
+    const params = new URLSearchParams({
+      finalAmount: startPrice,
+      customerName: leadRecord?.Last_Name,
+      customerPhone: leadRecord?.Mobile,
+    });
+    
+    if (bookingAmount)     params.set("directAmount", bookingAmount);
+    if (bookingPercentage) params.set("percentage", bookingPercentage);
+    
+
     try {
       await sendTemplateMessage({
         to: leadRecord.Mobile,
@@ -596,13 +606,14 @@ const EstimationConfirm = ({
         buttons: [
           {
             type: "URL",
-            parameter: `https://subscription.wensforce.com/rail-payment?finalAmount=${startPrice}&${bookingAmount ? `directAmount=${bookingAmount}` : ""}&${bookingPercentage ? `percentage=${bookingPercentage}` : ""}&customerName=${leadRecord?.Last_Name}&customerPhone=${leadRecord?.Mobile}`,
+            parameter: params.toString(),
           },
         ],
       });
 
       let payload = {
         Is_Estimation_Approved: true,
+        Approval_Status: "Accepted",
         Rail_Stage: "7",
         Lead_Status: "Manager Approved Estimate",
       };

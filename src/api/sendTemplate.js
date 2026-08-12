@@ -73,6 +73,8 @@ export const sendTemplateMessage = async ({
       ],
     };
 
+
+    console.log("Payload:", JSON.stringify(payload, null, 2));
     const response = await fetch(DOUBLE_TICK_API_URL, {
       method: "POST",
       headers: {
