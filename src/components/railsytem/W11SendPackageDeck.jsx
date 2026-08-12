@@ -3,6 +3,7 @@ import { getRecord, updateRecord } from '../../api/zohoCrm'
 import { useZohoCrm } from '../../context/ZohoCrmContext'
 import useSendDeckTemplate from '../../hooks/useSendDeckTemplate'
 import Loader from '../Loader'
+import { toast } from 'sonner'
 
 const formatCurrency = (value) => {
   if (value == null || value === '') return '—'
@@ -158,11 +159,13 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
       packageData: selectedPackage,
     })
       .then(async () => {
+        toast.success("Package deck sent successfully");
         await updateRecord('Leads', leadRecord?.id, { Package_Deck_Sent: true })
         await fetchLeadRecord(leadRecord?.id)
       })
       .catch((error) => {
         console.error('Error sending package deck template:', error)
+        toast.error("Failed to send package deck template");
       })
   }
 
@@ -176,7 +179,7 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
       await updateRecord('Leads', leadRecord?.id, { Rail_Stage: '11', Open_Package_Estimation: true })
       await fetchLeadRecord(leadRecord?.id)
     }
-    onContinue()
+    await onContinue()
     setLoading(false)
   }
 

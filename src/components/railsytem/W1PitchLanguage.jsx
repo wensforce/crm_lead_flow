@@ -111,9 +111,6 @@ const W1PitchLanguage = ({
               KA Discovery Call
             </h1>
           </div>
-          <p className="text-sm text-muted-foreground md:pb-1">
-            step 1 of 5 - pitch, language and fork - Rev B
-          </p>
         </div>
 
         <div className="surface-card space-y-6 p-4 md:space-y-7 md:p-7">

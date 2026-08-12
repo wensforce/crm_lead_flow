@@ -421,23 +421,17 @@ const W3GuidedRequirement = ({
               Rail CRM flow
             </p>
             <h1 className="mt-1.5 text-2xl font-semibold text-foreground md:text-3xl">
-              W3 Guided Requirement
+              Guided Requirement
             </h1>
           </div>
-          <p className="text-sm text-muted-foreground md:pb-1">
-            Step 2 - Path B: Guided requirement - Rev B
-          </p>
         </div>
 
         <div className="surface-card space-y-6 p-4 md:space-y-7 md:p-7">
           <header className="rounded-2xl bg-primary px-4 py-4 text-primary-foreground md:px-6">
             <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
               <h2 className="text-lg font-semibold tracking-tight md:text-xl">
-                KA - Discovery Call
+                Guided Requirement
               </h2>
-              <span className="text-sm text-primary-foreground/75 md:text-base">
-                Step 2 - Path B: Guided requirement - Rev B
-              </span>
             </div>
           </header>
 

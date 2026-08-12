@@ -10,6 +10,7 @@ import {
 import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { connectToCustomer, searchRecord, updateRecord } from "../../api/zohoCrm";
 import { sendProductPhotoTemplate } from "../../api/sendTemplate";
+import { toast } from "sonner";
 
 const ARMED_TYPES = [
   "Civilian",
@@ -285,10 +286,10 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
   const roleName = String(currentUser?.role?.name || "")
     .trim()
     .toLowerCase();
-  const isCeo = roleName === "ceo";
+  const isCeo = roleName === "ceo" || roleName === "manager";
 
   const handleConnectToCustomer = async () => {
-    
+    toast.info("This feature is not available yet");
   };
 
   const armedHintCount = toCount(leadRecord?.No_of_Armed_Personnel);
@@ -700,7 +701,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
         { Product_Sent_Template: updatedTemplateValue },
         ["workflow"],
       );
-
+      toast.success("Photo sent successfully");
       // update local state
       setSentProductIds(newSentCodes);
       setItems((prev) =>
@@ -712,6 +713,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
         [id]: { loading: false, error: "" },
       }));
     } catch (err) {
+      toast.error("Failed to send photo");
       setPhotoSendingMap((prev) => ({
         ...prev,
         [id]: { loading: false, error: err.message || "Failed to send photo" },
@@ -947,23 +949,17 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
             Rail CRM flow
           </p>
           <h1 className="mt-1.5 text-2xl font-semibold text-foreground md:text-3xl">
-            W5 Product Table
+            Product Table
           </h1>
         </div>
-        <p className="text-sm text-muted-foreground md:pb-1">
-          clean sales entry experience
-        </p>
       </div>
 
       <div className="surface-card space-y-6 p-4 md:space-y-7 md:p-7">
         <header className="rounded-2xl bg-primary px-4 py-4 text-primary-foreground md:px-6">
           <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
             <h2 className="text-lg font-semibold tracking-tight md:text-xl">
-              KA - Product Requirement Table
+              Product Table
             </h2>
-            <span className="text-sm text-primary-foreground/75 md:text-base">
-              Quick-entry mode for sales
-            </span>
           </div>
         </header>
 

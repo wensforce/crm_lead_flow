@@ -1,11 +1,33 @@
+import {
+  ConciergeBell,
+  ChefHat,
+  UtensilsCrossed,
+  UserRoundCheck,
+  Key,
+  BaggageClaim,
+  CarTaxiFront,
+  Accessibility,
+  Plane,
+  Armchair,
+} from "lucide-react";
+
 export const ADDON_SERVICE_SUGGESTIONS = [
-  { id: "srv-1", name: "Premium Catering", price: "15000", icon: "🍽️" },
-  { id: "srv-2", name: "Event Photography", price: "25000", icon: "📸" },
-  { id: "srv-3", name: "Luxury Transport", price: "50000", icon: "🚗" },
-  { id: "srv-4", name: "Security Team", price: "30000", icon: "👮" },
-  { id: "srv-5", name: "Medical Staff", price: "20000", icon: "🏥" },
-  { id: "srv-6", name: "VIP Hospitality", price: "18000", icon: "🎩" },
+  { id: "srv-1", name: "Concierge Request", price: "5000", Icon: ConciergeBell, recommended: true },
+  { id: "srv-2", name: "Gourmet Chef", price: "20000", Icon: ChefHat, recommended: true },
+  { id: "srv-3", name: "Butler Services", price: "9000", Icon: UtensilsCrossed },
+  { id: "srv-4", name: "Meet & Greet", price: "12000", Icon: UserRoundCheck, recommended: true },
+  { id: "srv-5", name: "Access", price: "35000", Icon: Key },
+  { id: "srv-6", name: "Airport Concierge", price: "13000", Icon: BaggageClaim, recommended: true },
+  { id: "srv-7", name: "Baby Seat", price: "2500", Icon: CarTaxiFront },
+  { id: "srv-8", name: "Wheelchair", price: "3500", Icon: Accessibility },
+  { id: "srv-9", name: "Jet Lag Pills", price: "0", Icon: Plane },
+  { id: "srv-10", name: "VIP Lounge Access", price: "7500", Icon: Armchair},
+  // { id: "srv-11", name: "Private Jet", price: "10000", Icon: PlanePrivate},
 ];
+
+export const RECOMMENDED_ADDON_SERVICES = ADDON_SERVICE_SUGGESTIONS.filter(
+  (service) => service.recommended,
+);
 
 export const parsePrice = (value) => {
   if (value == null || value === "") return 0;

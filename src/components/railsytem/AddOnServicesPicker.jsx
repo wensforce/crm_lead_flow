@@ -1,26 +1,61 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
 import {
   ADDON_SERVICE_SUGGESTIONS,
+  RECOMMENDED_ADDON_SERVICES,
   formatAddonPrice,
   parsePrice,
 } from "../../utils/addonServices";
+
+const ServiceRow = ({ service, onAdd }) => {
+  const Icon = service.Icon;
+
+  return (
+    <div className="flex items-center justify-between p-4 transition-colors hover:bg-muted/50 md:p-5">
+      <div className="flex flex-1 items-center gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
+          {Icon ? <Icon className="h-4 w-4" strokeWidth={2} /> : null}
+        </span>
+        <p className="flex-1 text-sm font-medium text-foreground">{service.name}</p>
+        <span className="text-sm font-semibold text-primary">
+          {formatAddonPrice(parsePrice(service.price))}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={() => onAdd(service)}
+        className="ml-3 shrink-0 rounded-lg bg-primary p-2 text-primary-foreground transition-colors hover:bg-primary/90"
+      >
+        <Plus size={18} strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+};
 
 const AddOnServicesPicker = ({
   selectedServices = [],
   onAddService = () => {},
   onRemoveService = () => {},
   searchTitle = "Add-on services",
-  searchPlaceholder = "Search services (e.g., catering, photography, security)...",
+  searchPlaceholder = "Search more services (e.g., butler, wheelchair, access)...",
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
 
+  const availableRecommended = useMemo(
+    () =>
+      RECOMMENDED_ADDON_SERVICES.filter(
+        (service) => !selectedServices.some((s) => s.id === service.id),
+      ),
+    [selectedServices],
+  );
+
   const searchServices = useCallback(
     (query) => {
       if (!query.trim()) {
         setSearchResults([]);
+        setIsSearching(false);
         return;
       }
 
@@ -52,6 +87,8 @@ const AddOnServicesPicker = ({
     setSearchQuery("");
   };
 
+  const isSearchingMode = Boolean(searchQuery.trim());
+
   return (
     <div className="space-y-4 rounded-xl border border-border bg-card p-4 md:p-5">
       <div className="space-y-3">
@@ -75,37 +112,45 @@ const AddOnServicesPicker = ({
           ) : null}
         </div>
 
-        {searchQuery && searchResults.length > 0 ? (
+        {!isSearchingMode && availableRecommended.length > 0 ? (
           <div className="overflow-hidden rounded-xl border border-border bg-background shadow-sm">
+            <div className="border-b border-border px-4 py-2.5 md:px-5">
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                Recommended
+              </p>
+            </div>
             <div className="divide-y divide-border">
-              {searchResults.map((service) => (
-                <div
+              {availableRecommended.map((service) => (
+                <ServiceRow
                   key={service.id}
-                  className="flex items-center justify-between p-4 transition-colors hover:bg-muted/50 md:p-5"
-                >
-                  <div className="flex flex-1 items-center gap-3">
-                    <span className="text-xl">{service.icon}</span>
-                    <p className="flex-1 text-sm font-medium text-foreground">
-                      {service.name}
-                    </p>
-                    <span className="text-sm font-semibold text-primary">
-                      {formatAddonPrice(parsePrice(service.price))}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleAddService(service)}
-                    className="ml-3 shrink-0 rounded-lg bg-primary p-2 text-primary-foreground transition-colors hover:bg-primary/90"
-                  >
-                    <Plus size={18} strokeWidth={2.5} />
-                  </button>
-                </div>
+                  service={service}
+                  onAdd={handleAddService}
+                />
               ))}
             </div>
           </div>
         ) : null}
 
-        {searchQuery && searchResults.length === 0 && !isSearching ? (
+        {isSearchingMode && searchResults.length > 0 ? (
+          <div className="overflow-hidden rounded-xl border border-border bg-background shadow-sm">
+            <div className="border-b border-border px-4 py-2.5 md:px-5">
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                Search results
+              </p>
+            </div>
+            <div className="divide-y divide-border">
+              {searchResults.map((service) => (
+                <ServiceRow
+                  key={service.id}
+                  service={service}
+                  onAdd={handleAddService}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {isSearchingMode && searchResults.length === 0 && !isSearching ? (
           <div className="rounded-xl border border-border bg-background p-5 text-center">
             <p className="text-sm text-muted-foreground">
               No services found. Try a different search.

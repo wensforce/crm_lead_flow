@@ -157,9 +157,11 @@ const EstimationConfirm = ({
   const [isDelayModalOpen, setIsDelayModalOpen] = useState(false);
   const [isDelaying, setIsDelaying] = useState(false);
   const [isUpdateTableModalOpen, setIsUpdateTableModalOpen] = useState(false);
-
-  const roleName = String(currentUser?.role?.name || "").trim().toLowerCase();
-  const isSalesRole = roleName === "sales";
+  const [exotelRecordingUrl, setExotelRecordingUrl] = useState("");
+  const roleName = String(currentUser?.role?.name || "")
+    .trim()
+    .toLowerCase();
+  const isSalesRole = roleName === "sales executive";
   const canGoToUpdateTable = !isSalesRole;
   const isEstimationApproved = toBooleanFlag(
     leadRecord?.Is_Estimation_Approved,
@@ -176,6 +178,18 @@ const EstimationConfirm = ({
   const isOpenPackageEstimation = useMemo(() => {
     return toBooleanFlag(leadRecord?.Open_Package_Estimation);
   }, [leadRecord?.Open_Package_Estimation]);
+
+  const convertZohoWorkDriveURL = (url) => {
+    if (!url) return "";
+    const id = String(url).split("https://workdrive.zoho.in/file/")[1];
+    console.log(
+      "id",
+      `https://download-accl.zoho.in/v1/workdrive/previewdata/${id}`,
+    );
+    setExotelRecordingUrl(
+      `https://download-accl.zoho.in/v1/workdrive/previewdata/${id}`,
+    );
+  };
 
   useEffect(() => {
     if (!packageRecordId) {
@@ -274,11 +288,15 @@ const EstimationConfirm = ({
       return;
     }
 
+    convertZohoWorkDriveURL(callRecordingUrl2);
+
     const tick = () => {
       const left = secondsUntil(deadlineAtMs);
       setSecondsLeft(left);
       if (left <= 0) {
-        setApprovalState((prev) => (prev === "pending" ? "auto-approved" : prev));
+        setApprovalState((prev) =>
+          prev === "pending" ? "auto-approved" : prev,
+        );
       }
     };
 
@@ -370,7 +388,8 @@ const EstimationConfirm = ({
   const packageIsFixedRate = isOpenPackageEstimation && !packageHasAddOns;
 
   const startPrice = useMemo(() => {
-    if (isOpenPackageEstimation && packageStartPrice > 0) return packageStartPrice;
+    if (isOpenPackageEstimation && packageStartPrice > 0)
+      return packageStartPrice;
     if (guidedGrandTotal > 0) return guidedGrandTotal;
     return packageStartPrice;
   }, [isOpenPackageEstimation, packageStartPrice, guidedGrandTotal]);
@@ -577,7 +596,7 @@ const EstimationConfirm = ({
         buttons: [
           {
             type: "URL",
-            parameter: `https://subscription.wensforce.com/rail-payment?finalAmount=${startPrice}&${bookingAmount ? `directAmount=${bookingAmount}` : ''}&${bookingPercentage ? `percentage=${bookingPercentage}` : ''}&customerName=${leadRecord?.Last_Name}&customerPhone=${leadRecord?.Mobile}`,
+            parameter: `https://subscription.wensforce.com/rail-payment?finalAmount=${startPrice}&${bookingAmount ? `directAmount=${bookingAmount}` : ""}&${bookingPercentage ? `percentage=${bookingPercentage}` : ""}&customerName=${leadRecord?.Last_Name}&customerPhone=${leadRecord?.Mobile}`,
           },
         ],
       });
@@ -585,7 +604,7 @@ const EstimationConfirm = ({
       let payload = {
         Estimation_Approval_Send: true,
         Is_Estimation_Approved: true,
-        Rail_Stage: '7',
+        Rail_Stage: "7",
       };
 
       if (isDirty && !isOpenPackageEstimation) {
@@ -676,9 +695,7 @@ const EstimationConfirm = ({
       setSecondsLeft(secondsUntil(nextDeadlineMs));
       setApprovalState("pending");
       setLeadRecord?.((prev) =>
-        prev
-          ? { ...prev, Estimate_Deadline_At: nextDeadlineValue }
-          : prev,
+        prev ? { ...prev, Estimate_Deadline_At: nextDeadlineValue } : prev,
       );
       setIsDelayModalOpen(false);
       toast.success(`Deadline extended by ${minutes} minutes`);
@@ -693,7 +710,8 @@ const EstimationConfirm = ({
 
   const additionalServices = editableAddonServices;
 
-  const callRecordingUrl = leadRecord?.Recording_URL_2 ||  "";
+  const callRecordingUrl = leadRecord?.Recording_URL_2 || "";
+  const callRecordingUrl2 = leadRecord?.Exo_Call_Recording_URL || "";
 
   const leadOwner =
     leadRecord?.Owner?.name ||
@@ -739,48 +757,29 @@ const EstimationConfirm = ({
     <>
       <Loader open={isSendingEstimate} />
       <section className="mx-auto w-full max-w-6xl px-4 py-8 md:px-8 md:py-12">
-      <div className="mb-7 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            Rail CRM flow
-          </p>
-          <h1 className="mt-1.5 text-2xl font-semibold text-foreground md:text-3xl">
-            Estimation Approval
-          </h1>
-        </div>
-        <p className="text-sm text-muted-foreground md:pb-1">
-          moderation and approval
-        </p>
-      </div>
-
-      <div className="surface-card space-y-6 p-4 md:space-y-7 md:p-7">
-        <header className="rounded-2xl bg-primary px-4 py-4 text-primary-foreground md:px-6">
-          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-            <h2 className="text-lg font-semibold tracking-tight md:text-xl">
-              Approval Desk
-            </h2>
-            <span className="text-sm text-primary-foreground/75 md:text-base">
-              {deadlineAtMs == null
-                ? "No deadline set"
-                : approvalState === "pending"
-                  ? `Auto approval in ${formatDuration(secondsLeft)}`
-                  : approvalState === "auto-approved"
-                    ? "Auto-approved at deadline"
-                    : "Manual action recorded"}
-            </span>
-          </div>
-        </header>
-
-        <div className={`rounded-xl border px-4 py-3 md:px-5 ${statusTone}`}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold">
-              Approval Status: {approvalState}
+        <div className="mb-7 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+              Rail CRM flow
             </p>
-            <div className="inline-flex items-center gap-2 text-sm font-medium">
-              <Clock3 size={16} />
-              <span>
+            <h1 className="mt-1.5 text-2xl font-semibold text-foreground md:text-3xl">
+              Estimation Approval
+            </h1>
+          </div>
+          <p className="text-sm text-muted-foreground md:pb-1">
+            moderation and approval
+          </p>
+        </div>
+
+        <div className="surface-card space-y-6 p-4 md:space-y-7 md:p-7">
+          <header className="rounded-2xl bg-primary px-4 py-4 text-primary-foreground md:px-6">
+            <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+              <h2 className="text-lg font-semibold tracking-tight md:text-xl">
+                Approval Desk
+              </h2>
+              <span className="text-sm text-primary-foreground/75 md:text-base">
                 {deadlineAtMs == null
-                  ? "Estimate deadline not set"
+                  ? "No deadline set"
                   : approvalState === "pending"
                     ? `Auto approval in ${formatDuration(secondsLeft)}`
                     : approvalState === "auto-approved"
@@ -788,536 +787,525 @@ const EstimationConfirm = ({
                       : "Manual action recorded"}
               </span>
             </div>
-          </div>
-        </div>
+          </header>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-xl border border-border bg-card p-4 md:p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Lead Owner
-            </p>
-            <p className="mt-2 flex items-center gap-2 text-base font-semibold text-foreground">
-              <UserRound size={16} />
-              {leadOwner}
-            </p>
+          <div className={`rounded-xl border px-4 py-3 md:px-5 ${statusTone}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold">
+                Approval Status: {approvalState}
+              </p>
+              <div className="inline-flex items-center gap-2 text-sm font-medium">
+                <Clock3 size={16} />
+                <span>
+                  {deadlineAtMs == null
+                    ? "Estimate deadline not set"
+                    : approvalState === "pending"
+                      ? `Auto approval in ${formatDuration(secondsLeft)}`
+                      : approvalState === "auto-approved"
+                        ? "Auto-approved at deadline"
+                        : "Manual action recorded"}
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4 md:p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Service Location
-            </p>
-            <p className="mt-2 flex items-center gap-2 text-base font-semibold text-foreground">
-              <MapPin size={16} />
-              {serviceLocation || "Not available"}
-            </p>
-          </div>
-        </div>
-
-        {!isOpenPackageEstimation && (
-        <div className="rounded-xl border border-border bg-card p-4 md:p-5">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-xl border border-border bg-card p-4 md:p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Product Summary
+                Lead Owner
               </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Selected lineup for this estimation
+              <p className="mt-2 flex items-center gap-2 text-base font-semibold text-foreground">
+                <UserRound size={16} />
+                {leadOwner}
               </p>
             </div>
-            <div className="flex flex-wrap gap-6">
-              <div>
-                <p className="text-xs text-muted-foreground">Armed</p>
-                <p className="text-xl font-bold text-foreground">{armedCount}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Unarmed</p>
-                <p className="text-xl font-bold text-foreground">{unarmedCount}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Cars</p>
-                <p className="text-xl font-bold text-foreground">{totalCars}</p>
-              </div>
+
+            <div className="rounded-xl border border-border bg-card p-4 md:p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Service Location
+              </p>
+              <p className="mt-2 flex items-center gap-2 text-base font-semibold text-foreground">
+                <MapPin size={16} />
+                {serviceLocation || "Not available"}
+              </p>
             </div>
           </div>
-        </div>
-        )}
 
-        {!isOpenPackageEstimation &&
-          (editableBodyguardRows.length > 0 ||
-            editableCarRows.length > 0 ||
-            editableAddonServices.length > 0) && (
-          <div className="rounded-xl border border-border bg-card p-4 md:p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 pb-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Selected Products
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {isEditingMargins
-                    ? "Edit mode — change margins and add-on service prices"
-                    : "Type, package, selling price, margin & final amount"}
-                </p>
-              </div>
-              <div className="flex flex-col items-end gap-1.5">
-                <p className="text-xs text-muted-foreground">Grand total</p>
-                <p className="text-lg font-bold text-foreground">
-                  {formatMoney(guidedGrandTotal)}
-                </p>
-                <div className="flex flex-wrap justify-end gap-2">
-                  {isEditingMargins && (
-                    <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-[11px] font-medium text-foreground">
-                      Editing
-                    </span>
-                  )}
-                  {isDirty && (
-                    <span className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-                      Unsaved
-                    </span>
-                  )}
+          {!isOpenPackageEstimation && (
+            <div className="rounded-xl border border-border bg-card p-4 md:p-5">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Product Summary
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Selected lineup for this estimation
+                  </p>
                 </div>
-              </div>
-            </div>
-
-            {editableBodyguardRows.length > 0 && (
-              <div className="mt-5">
-                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-muted text-foreground">
-                    <Shield size={14} />
-                  </span>
-                  Bodyguards
-                  <span className="text-xs font-medium text-muted-foreground">
-                    ({editableBodyguardRows.length})
-                  </span>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="hidden grid-cols-12 gap-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
-                    <span className="col-span-3">Product</span>
-                    <span className="col-span-2">Type</span>
-                    <span className="col-span-2">Package</span>
-                    <span className="col-span-2 text-right">Selling</span>
-                    <span className="col-span-1 text-right">Margin</span>
-                    <span className="col-span-2 text-right">Final</span>
+                <div className="flex flex-wrap gap-6">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Armed</p>
+                    <p className="text-xl font-bold text-foreground">
+                      {armedCount}
+                    </p>
                   </div>
-
-                  <ul className="space-y-2">
-                    {editableBodyguardRows.map((row, index) => (
-                      <li
-                        key={row?.id || `bg-${index}`}
-                        className={`grid grid-cols-1 gap-2 rounded-lg border bg-background px-3 py-3 md:grid-cols-12 md:items-center md:gap-3 md:px-3.5 ${
-                          isEditingMargins
-                            ? "border-foreground/20"
-                            : "border-border/70"
-                        }`}
-                      >
-                        <div className="md:col-span-3">
-                          <p className="text-sm font-semibold text-foreground">
-                            {row?.Bodyguard_Category || "Bodyguard"}
-                          </p>
-                        </div>
-                        <div className="flex justify-between md:col-span-2 md:block">
-                          <span className="text-xs text-muted-foreground md:hidden">Type</span>
-                          <p className="text-sm text-foreground">{row?.Bodyguard_Type || "-"}</p>
-                        </div>
-                        <div className="flex justify-between md:col-span-2 md:block">
-                          <span className="text-xs text-muted-foreground md:hidden">Package</span>
-                          <p className="text-sm text-foreground">{row?.Package_Type || "-"}</p>
-                        </div>
-                        <div className="flex justify-between md:col-span-2 md:block md:text-right">
-                          <span className="text-xs text-muted-foreground md:hidden">Selling</span>
-                          <p className="text-sm text-foreground">{formatMoney(row?.Selling_Price)}</p>
-                        </div>
-                        <div className="flex items-center justify-between gap-2 md:col-span-1 md:justify-end">
-                          <span className="text-xs text-muted-foreground md:hidden">Margin</span>
-                          {isEditingMargins ? (
-                            <div className="inline-flex items-center gap-1">
-                              <input
-                                type="number"
-                                min="0"
-                                max="200"
-                                value={row?.Margin ?? ""}
-                                onChange={(event) =>
-                                  updateBodyguardMargin(index, event.target.value)
-                                }
-                                className="w-16 rounded-md border border-foreground/25 bg-white px-2 py-1 text-right text-sm font-semibold text-foreground outline-none focus:border-foreground/50"
-                              />
-                              <span className="text-xs text-muted-foreground">%</span>
-                            </div>
-                          ) : (
-                            <p className="text-sm font-medium text-foreground">
-                              {row?.Margin != null && row?.Margin !== ""
-                                ? `${row.Margin}%`
-                                : "-"}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex justify-between md:col-span-2 md:block md:text-right">
-                          <span className="text-xs text-muted-foreground md:hidden">Final</span>
-                          <p className="text-sm font-semibold text-foreground">
-                            {formatMoney(row?.Final_Amount)}
-                          </p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-
-            {editableCarRows.length > 0 && (
-              <div className="mt-6">
-                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-muted text-foreground">
-                    <Car size={14} />
-                  </span>
-                  Cars
-                  <span className="text-xs font-medium text-muted-foreground">
-                    ({editableCarRows.length})
-                  </span>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="hidden grid-cols-12 gap-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
-                    <span className="col-span-3">Product</span>
-                    <span className="col-span-2">Type</span>
-                    <span className="col-span-2">Package</span>
-                    <span className="col-span-2 text-right">Selling</span>
-                    <span className="col-span-1 text-right">Margin</span>
-                    <span className="col-span-2 text-right">Final</span>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Unarmed</p>
+                    <p className="text-xl font-bold text-foreground">
+                      {unarmedCount}
+                    </p>
                   </div>
-
-                  <ul className="space-y-2">
-                    {editableCarRows.map((row, index) => (
-                      <li
-                        key={row?.id || `car-${index}`}
-                        className={`grid grid-cols-1 gap-2 rounded-lg border bg-background px-3 py-3 md:grid-cols-12 md:items-center md:gap-3 md:px-3.5 ${
-                          isEditingMargins
-                            ? "border-foreground/20"
-                            : "border-border/70"
-                        }`}
-                      >
-                        <div className="md:col-span-3">
-                          <p className="text-sm font-semibold text-foreground">
-                            {row?.Car_Label || row?.Car_Type || "Car"}
-                          </p>
-                        </div>
-                        <div className="flex justify-between md:col-span-2 md:block">
-                          <span className="text-xs text-muted-foreground md:hidden">Type</span>
-                          <p className="text-sm text-foreground">{row?.Car_Type || "-"}</p>
-                        </div>
-                        <div className="flex justify-between md:col-span-2 md:block">
-                          <span className="text-xs text-muted-foreground md:hidden">Package</span>
-                          <p className="text-sm text-foreground">{row?.Package_Type || "-"}</p>
-                        </div>
-                        <div className="flex justify-between md:col-span-2 md:block md:text-right">
-                          <span className="text-xs text-muted-foreground md:hidden">Selling</span>
-                          <p className="text-sm text-foreground">{formatMoney(row?.Selling_Price)}</p>
-                        </div>
-                        <div className="flex items-center justify-between gap-2 md:col-span-1 md:justify-end">
-                          <span className="text-xs text-muted-foreground md:hidden">Margin</span>
-                          {isEditingMargins ? (
-                            <div className="inline-flex items-center gap-1">
-                              <input
-                                type="number"
-                                min="0"
-                                max="200"
-                                value={row?.Margin ?? ""}
-                                onChange={(event) =>
-                                  updateCarMargin(index, event.target.value)
-                                }
-                                className="w-16 rounded-md border border-foreground/25 bg-white px-2 py-1 text-right text-sm font-semibold text-foreground outline-none focus:border-foreground/50"
-                              />
-                              <span className="text-xs text-muted-foreground">%</span>
-                            </div>
-                          ) : (
-                            <p className="text-sm font-medium text-foreground">
-                              {row?.Margin != null && row?.Margin !== ""
-                                ? `${row.Margin}%`
-                                : "-"}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex justify-between md:col-span-2 md:block md:text-right">
-                          <span className="text-xs text-muted-foreground md:hidden">Final</span>
-                          <p className="text-sm font-semibold text-foreground">
-                            {formatMoney(row?.Final_Amount)}
-                          </p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Cars</p>
+                    <p className="text-xl font-bold text-foreground">
+                      {totalCars}
+                    </p>
+                  </div>
                 </div>
               </div>
-            )}
-
-            <div className="mt-5 flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t border-border/70 pt-4 text-sm">
-              <p className="text-muted-foreground">
-                Bodyguards{" "}
-                <span className="font-semibold text-foreground">
-                  {formatMoney(guidedBodyguardTotal)}
-                </span>
-              </p>
-              <p className="text-muted-foreground">
-                Cars{" "}
-                <span className="font-semibold text-foreground">
-                  {formatMoney(guidedCarTotal)}
-                </span>
-              </p>
-              {editableAddonServices.length > 0 ? (
-                <p className="text-muted-foreground">
-                  Add-on services{" "}
-                  <span className="font-semibold text-foreground">
-                    {formatMoney(guidedAddonServicesTotal)}
-                  </span>
-                </p>
-              ) : null}
-              <p className="text-base font-bold text-primary">
-                Total {formatMoney(guidedGrandTotal)}
-              </p>
             </div>
+          )}
 
-            {editableAddonServices.length > 0 ? (
-              <div className="mt-4 space-y-2">
-                <p className="text-sm font-medium text-foreground">
-                  Guided add-on services
-                </p>
-                <EditableAddonServicesList
-                  services={editableAddonServices}
-                  editable={isEditingMargins}
-                  onPriceChange={updateAddonPrice}
-                  formatMoney={formatMoney}
-                />
-              </div>
-            ) : null}
-          </div>
-        )}
+          {!isOpenPackageEstimation &&
+            (editableBodyguardRows.length > 0 ||
+              editableCarRows.length > 0 ||
+              editableAddonServices.length > 0) && (
+              <div className="rounded-xl border border-border bg-card p-4 md:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 pb-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Selected Products
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {isEditingMargins
+                        ? "Edit mode — change margins and add-on service prices"
+                        : "Type, package, selling price, margin & final amount"}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <p className="text-xs text-muted-foreground">Grand total</p>
+                    <p className="text-lg font-bold text-foreground">
+                      {formatMoney(guidedGrandTotal)}
+                    </p>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {isEditingMargins && (
+                        <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-[11px] font-medium text-foreground">
+                          Editing
+                        </span>
+                      )}
+                      {isDirty && (
+                        <span className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          Unsaved
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-        {isOpenPackageEstimation && packageRecordId && (
-          <div className="rounded-xl border border-border bg-card p-4 md:p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Package Option
-                </p>
-                <p className="mt-2 inline-flex items-center gap-2 text-base font-semibold text-foreground">
-                  <Package size={16} />
-                  {selectedPackage?.Title ||
-                    leadRecord?.Package_Name ||
-                    "Selected package"}
-                </p>
-              </div>
-              {packageUsesRange && (
-                <button
-                  type="button"
-                  onClick={() => setIsEditingMargins((prev) => !prev)}
-                  disabled={isEstimationApprovalSent || isSendingEstimate}
-                  className="btn-secondary min-h-10 min-w-28 inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Pencil size={16} />
-                  {isEditingMargins ? "Lock" : "Edit"}
-                </button>
-              )}
-              {!packageUsesRange && additionalServices.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setIsEditingMargins((prev) => !prev)}
-                  disabled={isEstimationApprovalSent || isSendingEstimate}
-                  className="btn-secondary min-h-10 min-w-28 inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Pencil size={16} />
-                  {isEditingMargins ? "Lock" : "Edit prices"}
-                </button>
-              )}
-            </div>
+                {editableBodyguardRows.length > 0 && (
+                  <div className="mt-5">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-muted text-foreground">
+                        <Shield size={14} />
+                      </span>
+                      Bodyguards
+                      <span className="text-xs font-medium text-muted-foreground">
+                        ({editableBodyguardRows.length})
+                      </span>
+                    </div>
 
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
-                <p className="text-xs text-muted-foreground">Package armed</p>
-                <p className="mt-1 font-semibold text-foreground">
-                  {selectedPackage?.No_of_Armed_Personnel || 0}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
-                <p className="text-xs text-muted-foreground">Package unarmed</p>
-                <p className="mt-1 font-semibold text-foreground">
-                  {selectedPackage?.No_of_Unarmed_Personnel || 0}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
-                <p className="text-xs text-muted-foreground">Package cars</p>
-                <p className="mt-1 font-semibold text-foreground">
-                  {selectedPackage?.Car_Type || "Not specified"}
-                </p>
-              </div>
-            </div>
+                    <div className="space-y-2">
+                      <div className="hidden grid-cols-12 gap-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+                        <span className="col-span-3">Product</span>
+                        <span className="col-span-2">Type</span>
+                        <span className="col-span-2">Package</span>
+                        <span className="col-span-2 text-right">Selling</span>
+                        <span className="col-span-1 text-right">Margin</span>
+                        <span className="col-span-2 text-right">Final</span>
+                      </div>
 
-            <div className="mt-3 space-y-2">
-              <p className="text-sm font-medium text-foreground">
-                Additional requested services
-              </p>
-              {additionalServices.length > 0 || packageHasAddOns ? (
-                <div className="space-y-3">
-                  {(toInt(leadRecord?.Additional_Armed) > 0 ||
-                    toInt(leadRecord?.Additional_Unarmed) > 0 ||
-                    toInt(leadRecord?.Additional_Luxury_Car) > 0 ||
-                    toInt(leadRecord?.Additional_Standard_Car) > 0) && (
-                    <ul className="space-y-1 text-sm text-muted-foreground">
-                      {toInt(leadRecord?.Additional_Armed) > 0 && (
-                        <li className="rounded-md bg-muted/20 px-3 py-2">
-                          Additional Armed × {toInt(leadRecord?.Additional_Armed)}{" "}
-                          ({formatMoney(toInt(leadRecord?.Additional_Armed) * ADDON_PRICES.armedBodyguard)})
-                        </li>
-                      )}
-                      {toInt(leadRecord?.Additional_Unarmed) > 0 && (
-                        <li className="rounded-md bg-muted/20 px-3 py-2">
-                          Additional Unarmed × {toInt(leadRecord?.Additional_Unarmed)}{" "}
-                          ({formatMoney(toInt(leadRecord?.Additional_Unarmed) * ADDON_PRICES.unarmedBodyguard)})
-                        </li>
-                      )}
-                      {toInt(leadRecord?.Additional_Luxury_Car) > 0 && (
-                        <li className="rounded-md bg-muted/20 px-3 py-2">
-                          Additional Luxury Car × {toInt(leadRecord?.Additional_Luxury_Car)}{" "}
-                          ({formatMoney(toInt(leadRecord?.Additional_Luxury_Car) * ADDON_PRICES.luxuryVehicle)})
-                        </li>
-                      )}
-                      {toInt(leadRecord?.Additional_Standard_Car) > 0 && (
-                        <li className="rounded-md bg-muted/20 px-3 py-2">
-                          Additional Standard Car × {toInt(leadRecord?.Additional_Standard_Car)}{" "}
-                          ({formatMoney(toInt(leadRecord?.Additional_Standard_Car) * ADDON_PRICES.standardVehicle)})
-                        </li>
-                      )}
-                    </ul>
-                  )}
-                  {additionalServices.length > 0 ? (
+                      <ul className="space-y-2">
+                        {editableBodyguardRows.map((row, index) => (
+                          <li
+                            key={row?.id || `bg-${index}`}
+                            className={`grid grid-cols-1 gap-2 rounded-lg border bg-background px-3 py-3 md:grid-cols-12 md:items-center md:gap-3 md:px-3.5 ${
+                              isEditingMargins
+                                ? "border-foreground/20"
+                                : "border-border/70"
+                            }`}
+                          >
+                            <div className="md:col-span-3">
+                              <p className="text-sm font-semibold text-foreground">
+                                {row?.Bodyguard_Category || "Bodyguard"}
+                              </p>
+                            </div>
+                            <div className="flex justify-between md:col-span-2 md:block">
+                              <span className="text-xs text-muted-foreground md:hidden">
+                                Type
+                              </span>
+                              <p className="text-sm text-foreground">
+                                {row?.Bodyguard_Type || "-"}
+                              </p>
+                            </div>
+                            <div className="flex justify-between md:col-span-2 md:block">
+                              <span className="text-xs text-muted-foreground md:hidden">
+                                Package
+                              </span>
+                              <p className="text-sm text-foreground">
+                                {row?.Package_Type || "-"}
+                              </p>
+                            </div>
+                            <div className="flex justify-between md:col-span-2 md:block md:text-right">
+                              <span className="text-xs text-muted-foreground md:hidden">
+                                Selling
+                              </span>
+                              <p className="text-sm text-foreground">
+                                {formatMoney(row?.Selling_Price)}
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 md:col-span-1 md:justify-end">
+                              <span className="text-xs text-muted-foreground md:hidden">
+                                Margin
+                              </span>
+                              {isEditingMargins ? (
+                                <div className="inline-flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="200"
+                                    value={row?.Margin ?? ""}
+                                    onChange={(event) =>
+                                      updateBodyguardMargin(
+                                        index,
+                                        event.target.value,
+                                      )
+                                    }
+                                    className="w-16 rounded-md border border-foreground/25 bg-white px-2 py-1 text-right text-sm font-semibold text-foreground outline-none focus:border-foreground/50"
+                                  />
+                                  <span className="text-xs text-muted-foreground">
+                                    %
+                                  </span>
+                                </div>
+                              ) : (
+                                <p className="text-sm font-medium text-foreground">
+                                  {row?.Margin != null && row?.Margin !== ""
+                                    ? `${row.Margin}%`
+                                    : "-"}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex justify-between md:col-span-2 md:block md:text-right">
+                              <span className="text-xs text-muted-foreground md:hidden">
+                                Final
+                              </span>
+                              <p className="text-sm font-semibold text-foreground">
+                                {formatMoney(row?.Final_Amount)}
+                              </p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {editableCarRows.length > 0 && (
+                  <div className="mt-6">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-muted text-foreground">
+                        <Car size={14} />
+                      </span>
+                      Cars
+                      <span className="text-xs font-medium text-muted-foreground">
+                        ({editableCarRows.length})
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="hidden grid-cols-12 gap-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+                        <span className="col-span-3">Product</span>
+                        <span className="col-span-2">Type</span>
+                        <span className="col-span-2">Package</span>
+                        <span className="col-span-2 text-right">Selling</span>
+                        <span className="col-span-1 text-right">Margin</span>
+                        <span className="col-span-2 text-right">Final</span>
+                      </div>
+
+                      <ul className="space-y-2">
+                        {editableCarRows.map((row, index) => (
+                          <li
+                            key={row?.id || `car-${index}`}
+                            className={`grid grid-cols-1 gap-2 rounded-lg border bg-background px-3 py-3 md:grid-cols-12 md:items-center md:gap-3 md:px-3.5 ${
+                              isEditingMargins
+                                ? "border-foreground/20"
+                                : "border-border/70"
+                            }`}
+                          >
+                            <div className="md:col-span-3">
+                              <p className="text-sm font-semibold text-foreground">
+                                {row?.Car_Label || row?.Car_Type || "Car"}
+                              </p>
+                            </div>
+                            <div className="flex justify-between md:col-span-2 md:block">
+                              <span className="text-xs text-muted-foreground md:hidden">
+                                Type
+                              </span>
+                              <p className="text-sm text-foreground">
+                                {row?.Car_Type || "-"}
+                              </p>
+                            </div>
+                            <div className="flex justify-between md:col-span-2 md:block">
+                              <span className="text-xs text-muted-foreground md:hidden">
+                                Package
+                              </span>
+                              <p className="text-sm text-foreground">
+                                {row?.Package_Type || "-"}
+                              </p>
+                            </div>
+                            <div className="flex justify-between md:col-span-2 md:block md:text-right">
+                              <span className="text-xs text-muted-foreground md:hidden">
+                                Selling
+                              </span>
+                              <p className="text-sm text-foreground">
+                                {formatMoney(row?.Selling_Price)}
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 md:col-span-1 md:justify-end">
+                              <span className="text-xs text-muted-foreground md:hidden">
+                                Margin
+                              </span>
+                              {isEditingMargins ? (
+                                <div className="inline-flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="200"
+                                    value={row?.Margin ?? ""}
+                                    onChange={(event) =>
+                                      updateCarMargin(index, event.target.value)
+                                    }
+                                    className="w-16 rounded-md border border-foreground/25 bg-white px-2 py-1 text-right text-sm font-semibold text-foreground outline-none focus:border-foreground/50"
+                                  />
+                                  <span className="text-xs text-muted-foreground">
+                                    %
+                                  </span>
+                                </div>
+                              ) : (
+                                <p className="text-sm font-medium text-foreground">
+                                  {row?.Margin != null && row?.Margin !== ""
+                                    ? `${row.Margin}%`
+                                    : "-"}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex justify-between md:col-span-2 md:block md:text-right">
+                              <span className="text-xs text-muted-foreground md:hidden">
+                                Final
+                              </span>
+                              <p className="text-sm font-semibold text-foreground">
+                                {formatMoney(row?.Final_Amount)}
+                              </p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-5 flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t border-border/70 pt-4 text-sm">
+                  <p className="text-muted-foreground">
+                    Bodyguards{" "}
+                    <span className="font-semibold text-foreground">
+                      {formatMoney(guidedBodyguardTotal)}
+                    </span>
+                  </p>
+                  <p className="text-muted-foreground">
+                    Cars{" "}
+                    <span className="font-semibold text-foreground">
+                      {formatMoney(guidedCarTotal)}
+                    </span>
+                  </p>
+                  {editableAddonServices.length > 0 ? (
+                    <p className="text-muted-foreground">
+                      Add-on services{" "}
+                      <span className="font-semibold text-foreground">
+                        {formatMoney(guidedAddonServicesTotal)}
+                      </span>
+                    </p>
+                  ) : null}
+                  <p className="text-base font-bold text-primary">
+                    Total {formatMoney(guidedGrandTotal)}
+                  </p>
+                </div>
+
+                {editableAddonServices.length > 0 ? (
+                  <div className="mt-4 space-y-2">
+                    <p className="text-sm font-medium text-foreground">
+                      Guided add-on services
+                    </p>
                     <EditableAddonServicesList
-                      services={additionalServices}
+                      services={editableAddonServices}
                       editable={isEditingMargins}
                       onPriceChange={updateAddonPrice}
                       formatMoney={formatMoney}
                     />
-                  ) : null}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No additional services requested.
-                </p>
-              )}
-            </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
 
-            {packageUsesRange && (
-              <div className="mt-4 rounded-lg border border-border bg-muted/20 px-3 py-3">
-                <p className="text-xs text-muted-foreground">
-                  {isEditingMargins
-                    ? "Edit mode — package margin and add-on service prices are editable"
-                    : "Package range margin"}
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <label
-                    htmlFor="w7-package-margin"
-                    className="text-sm font-medium text-foreground whitespace-nowrap"
+          {isOpenPackageEstimation && packageRecordId && (
+            <div className="rounded-xl border border-border bg-card p-4 md:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Package Option
+                  </p>
+                  <p className="mt-2 inline-flex items-center gap-2 text-base font-semibold text-foreground">
+                    <Package size={16} />
+                    {selectedPackage?.Title ||
+                      leadRecord?.Package_Name ||
+                      "Selected package"}
+                  </p>
+                </div>
+                {packageUsesRange && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingMargins((prev) => !prev)}
+                    disabled={isEstimationApprovalSent || isSendingEstimate}
+                    className="btn-secondary min-h-10 min-w-28 inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Margin
-                  </label>
-                  {isEditingMargins ? (
-                    <input
-                      id="w7-package-margin"
-                      type="number"
-                      min="0"
-                      max="200"
-                      step="1"
-                      value={packageMargin}
-                      onChange={(e) =>
-                        setPackageMargin(
-                          e.target.value === ""
-                            ? ""
-                            : Math.max(0, Number(e.target.value) || 0),
-                        )
-                      }
-                      className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-base font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  ) : (
-                    <p className="text-sm font-semibold text-foreground">
-                      {packageMargin}%
-                    </p>
-                  )}
-                  <span className="text-xs text-muted-foreground">
-                    End = start + margin%
-                  </span>
+                    <Pencil size={16} />
+                    {isEditingMargins ? "Lock" : "Edit"}
+                  </button>
+                )}
+                {!packageUsesRange && additionalServices.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingMargins((prev) => !prev)}
+                    disabled={isEstimationApprovalSent || isSendingEstimate}
+                    className="btn-secondary min-h-10 min-w-28 inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Pencil size={16} />
+                    {isEditingMargins ? "Lock" : "Edit prices"}
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Package armed</p>
+                  <p className="mt-1 font-semibold text-foreground">
+                    {selectedPackage?.No_of_Armed_Personnel || 0}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">
+                    Package unarmed
+                  </p>
+                  <p className="mt-1 font-semibold text-foreground">
+                    {selectedPackage?.No_of_Unarmed_Personnel || 0}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Package cars</p>
+                  <p className="mt-1 font-semibold text-foreground">
+                    {selectedPackage?.Car_Type || "Not specified"}
+                  </p>
                 </div>
               </div>
-            )}
 
-            {packageIsFixedRate && (
-              <p className="mt-3 text-xs text-muted-foreground">
-                Fixed package rate — no range (no additional services).
-              </p>
-            )}
-          </div>
-        )}
-
-        <div className="rounded-xl border border-border bg-card p-4 md:p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Call Recording (Audio)
-          </p>
-          <div className="mt-3">
-            {callRecordingUrl ? (
-              <div className="space-y-2">
-                <div className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Mic size={16} /> Recording attached
-                </div>
-                <audio controls src={callRecordingUrl} className="w-full" />
+              <div className="mt-3 space-y-2">
+                <p className="text-sm font-medium text-foreground">
+                  Additional requested services
+                </p>
+                {additionalServices.length > 0 || packageHasAddOns ? (
+                  <div className="space-y-3">
+                    {(toInt(leadRecord?.Additional_Armed) > 0 ||
+                      toInt(leadRecord?.Additional_Unarmed) > 0 ||
+                      toInt(leadRecord?.Additional_Luxury_Car) > 0 ||
+                      toInt(leadRecord?.Additional_Standard_Car) > 0) && (
+                      <ul className="space-y-1 text-sm text-muted-foreground">
+                        {toInt(leadRecord?.Additional_Armed) > 0 && (
+                          <li className="rounded-md bg-muted/20 px-3 py-2">
+                            Additional Armed ×{" "}
+                            {toInt(leadRecord?.Additional_Armed)} (
+                            {formatMoney(
+                              toInt(leadRecord?.Additional_Armed) *
+                                ADDON_PRICES.armedBodyguard,
+                            )}
+                            )
+                          </li>
+                        )}
+                        {toInt(leadRecord?.Additional_Unarmed) > 0 && (
+                          <li className="rounded-md bg-muted/20 px-3 py-2">
+                            Additional Unarmed ×{" "}
+                            {toInt(leadRecord?.Additional_Unarmed)} (
+                            {formatMoney(
+                              toInt(leadRecord?.Additional_Unarmed) *
+                                ADDON_PRICES.unarmedBodyguard,
+                            )}
+                            )
+                          </li>
+                        )}
+                        {toInt(leadRecord?.Additional_Luxury_Car) > 0 && (
+                          <li className="rounded-md bg-muted/20 px-3 py-2">
+                            Additional Luxury Car ×{" "}
+                            {toInt(leadRecord?.Additional_Luxury_Car)} (
+                            {formatMoney(
+                              toInt(leadRecord?.Additional_Luxury_Car) *
+                                ADDON_PRICES.luxuryVehicle,
+                            )}
+                            )
+                          </li>
+                        )}
+                        {toInt(leadRecord?.Additional_Standard_Car) > 0 && (
+                          <li className="rounded-md bg-muted/20 px-3 py-2">
+                            Additional Standard Car ×{" "}
+                            {toInt(leadRecord?.Additional_Standard_Car)} (
+                            {formatMoney(
+                              toInt(leadRecord?.Additional_Standard_Car) *
+                                ADDON_PRICES.standardVehicle,
+                            )}
+                            )
+                          </li>
+                        )}
+                      </ul>
+                    )}
+                    {additionalServices.length > 0 ? (
+                      <EditableAddonServicesList
+                        services={additionalServices}
+                        editable={isEditingMargins}
+                        onPriceChange={updateAddonPrice}
+                        formatMoney={formatMoney}
+                      />
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No additional services requested.
+                  </p>
+                )}
               </div>
-            ) : (
-              <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                <Mic size={16} /> Recording not available
-              </div>
-            )}
-          </div>
-        </div>
 
-        <div className="rounded-2xl border border-border bg-white px-6 py-5 md:px-8 md:py-6">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
-            {packageIsFixedRate
-              ? "Fixed Rate · Computed"
-              : "Estimation Range · Computed"}
-          </p>
-          <p className="text-2xl font-bold tracking-tight text-gray-900 md:text-3xl">
-            {estimationPriceLabel}
-          </p>
-          <p className="mt-2 text-xs text-gray-500">
-            {packageIsFixedRate
-              ? "Fixed package price (no additional services) — only start is saved"
-              : isOpenPackageEstimation
-                ? "Start price is from package pricing"
-                : "Start price is sum of product finals"}
-            {isEditingMargins
-              ? packageUsesRange
-                ? " (updates live when you change package margin)"
-                : " (updates live when you change margins)"
-              : ""}
-            {!packageIsFixedRate
-              ? `. End = start + ${packageMargin}%. Starting price is not manually editable.`
-              : "."}
-          </p>
-          <div
-            className={`mt-4 grid gap-3 ${
-              packageIsFixedRate ? "md:grid-cols-1" : "md:grid-cols-3"
-            }`}
-          >
-            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-              <p className="text-xs text-gray-500">Starting Price</p>
-              <p className="mt-1 text-sm font-semibold text-gray-900">
-                {formatMoney(startPrice)}
-              </p>
-            </div>
-            {!packageIsFixedRate && (
-              <>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                  <p className="text-xs text-gray-500">Margin</p>
-                  {isEditingMargins ? (
-                    <div className="mt-1 flex items-center gap-1.5">
+              {packageUsesRange && (
+                <div className="mt-4 rounded-lg border border-border bg-muted/20 px-3 py-3">
+                  <p className="text-xs text-muted-foreground">
+                    {isEditingMargins
+                      ? "Edit mode — package margin and add-on service prices are editable"
+                      : "Package range margin"}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <label
+                      htmlFor="w7-package-margin"
+                      className="text-sm font-medium text-foreground whitespace-nowrap"
+                    >
+                      Margin
+                    </label>
+                    {isEditingMargins ? (
                       <input
-                        id="w7-estimation-percentage"
+                        id="w7-package-margin"
                         type="number"
                         min="0"
                         max="200"
@@ -1330,52 +1318,160 @@ const EstimationConfirm = ({
                               : Math.max(0, Number(e.target.value) || 0),
                           )
                         }
-                        className="w-20 rounded-md border border-border bg-background px-2 py-1 text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-base font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                       />
-                      <span className="text-sm font-semibold text-gray-900">
-                        %
-                      </span>
-                    </div>
-                  ) : (
-                    <p className="mt-1 text-sm font-semibold text-gray-900">
-                      {packageMargin}%
-                    </p>
-                  )}
+                    ) : (
+                      <p className="text-sm font-semibold text-foreground">
+                        {packageMargin}%
+                      </p>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      End = start + margin%
+                    </span>
+                  </div>
                 </div>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                  <p className="text-xs text-gray-500">Ending Price</p>
-                  <p className="mt-1 text-sm font-semibold text-gray-900">
-                    {formatMoney(endingPrice)}
-                  </p>
+              )}
+
+              {packageIsFixedRate && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Fixed package rate — no range (no additional services).
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="rounded-xl border border-border bg-card p-4 md:p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Call Recording (Audio)
+            </p>
+            {callRecordingUrl && (
+              <div className="mt-3">
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Mic size={16} /> Recording attached
+                  </div>
+                  <audio controls src={callRecordingUrl} className="w-full" />
                 </div>
-              </>
+              </div>
+            )}
+            {callRecordingUrl2 && (
+              <div className="mt-3">
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Mic size={16} /> Recording attached
+                  </div>
+                  <audio controls src={exotelRecordingUrl} className="w-full" />
+                </div>
+              </div>
+            )}
+            {!callRecordingUrl && !callRecordingUrl2 && (
+              <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                <Mic size={16} /> Recording not available
+              </div>
             )}
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-3 pt-1">
-          <button
-            type="button"
-            onClick={handleApprove}
-            disabled={isSendingEstimate}
-            className="btn-primary min-h-12 min-w-36 inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSendingEstimate ? (
-              <>
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Approving…
-              </>
-            ) : isEstimationApprovalSent ? (
-              "Continue"
-            ) : (
-              <>
-                <CheckCircle2 size={16} />
-                Approve
-              </>
-            )}
-          </button>
+          <div className="rounded-2xl border border-border bg-white px-6 py-5 md:px-8 md:py-6">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+              {packageIsFixedRate
+                ? "Fixed Rate · Computed"
+                : "Estimation Range · Computed"}
+            </p>
+            <p className="text-2xl font-bold tracking-tight text-gray-900 md:text-3xl">
+              {estimationPriceLabel}
+            </p>
+            <p className="mt-2 text-xs text-gray-500">
+              {packageIsFixedRate
+                ? "Fixed package price (no additional services) — only start is saved"
+                : isOpenPackageEstimation
+                  ? "Start price is from package pricing"
+                  : "Start price is sum of product finals"}
+              {isEditingMargins
+                ? packageUsesRange
+                  ? " (updates live when you change package margin)"
+                  : " (updates live when you change margins)"
+                : ""}
+              {!packageIsFixedRate
+                ? `. End = start + ${packageMargin}%. Starting price is not manually editable.`
+                : "."}
+            </p>
+            <div
+              className={`mt-4 grid gap-3 ${
+                packageIsFixedRate ? "md:grid-cols-1" : "md:grid-cols-3"
+              }`}
+            >
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                <p className="text-xs text-gray-500">Starting Price</p>
+                <p className="mt-1 text-sm font-semibold text-gray-900">
+                  {formatMoney(startPrice)}
+                </p>
+              </div>
+              {!packageIsFixedRate && (
+                <>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                    <p className="text-xs text-gray-500">Margin</p>
+                    {isEditingMargins ? (
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <input
+                          id="w7-estimation-percentage"
+                          type="number"
+                          min="0"
+                          max="200"
+                          step="1"
+                          value={packageMargin}
+                          onChange={(e) =>
+                            setPackageMargin(
+                              e.target.value === ""
+                                ? ""
+                                : Math.max(0, Number(e.target.value) || 0),
+                            )
+                          }
+                          className="w-20 rounded-md border border-border bg-background px-2 py-1 text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                        <span className="text-sm font-semibold text-gray-900">
+                          %
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-sm font-semibold text-gray-900">
+                        {packageMargin}%
+                      </p>
+                    )}
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                    <p className="text-xs text-gray-500">Ending Price</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">
+                      {formatMoney(endingPrice)}
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
 
-          {/* <button
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <button
+              type="button"
+              onClick={handleApprove}
+              disabled={isSendingEstimate}
+              className="btn-primary min-h-12 min-w-36 inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSendingEstimate ? (
+                <>
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Approving…
+                </>
+              ) : isEstimationApprovalSent ? (
+                "Continue"
+              ) : (
+                <>
+                  <CheckCircle2 size={16} />
+                  Approve
+                </>
+              )}
+            </button>
+
+            {/* <button
             type="button"
             onClick={() => {
               setApprovalState("rejected");
@@ -1387,53 +1483,49 @@ const EstimationConfirm = ({
             Reject
           </button> */}
 
-          {canEditMargins && (
+            {canEditMargins && (
+              <button
+                type="button"
+                onClick={() => setIsEditingMargins((prev) => !prev)}
+                disabled={isEstimationApproved || isSendingEstimate}
+                className="btn-secondary min-h-12 min-w-32 inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Pencil size={16} />
+                {isEditingMargins ? "Lock" : "Edit"}
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={() => setIsEditingMargins((prev) => !prev)}
-              disabled={isEstimationApproved || isSendingEstimate}
+              onClick={() => setIsDelayModalOpen(true)}
+              disabled={isSendingEstimate || isDelaying || isEstimationApproved}
               className="btn-secondary min-h-12 min-w-32 inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Pencil size={16} />
-              {isEditingMargins ? "Lock" : "Edit"}
+              <PauseCircle size={16} />
+              Delay
             </button>
-          )}
 
-          <button
-            type="button"
-            onClick={() => setIsDelayModalOpen(true)}
-            disabled={
-              isSendingEstimate ||
-              isDelaying ||
-              isEstimationApproved
-            }
-            className="btn-secondary min-h-12 min-w-32 inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <PauseCircle size={16} />
-            Delay
-          </button>
+            {canGoToUpdateTable && (
+              <button
+                type="button"
+                onClick={() => setIsUpdateTableModalOpen(true)}
+                disabled={isSendingEstimate || isDelaying}
+                className="btn-secondary min-h-12 min-w-40 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Go to Update Table
+              </button>
+            )}
 
-          {canGoToUpdateTable && (
             <button
               type="button"
-              onClick={() => setIsUpdateTableModalOpen(true)}
-              disabled={isSendingEstimate || isDelaying}
-              className="btn-secondary min-h-12 min-w-40 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={onBack}
+              className="btn-secondary min-h-12 min-w-28"
             >
-              Go to Update Table
+              Back
             </button>
-          )}
-
-          <button
-            type="button"
-            onClick={onBack}
-            className="btn-secondary min-h-12 min-w-28"
-          >
-            Back
-          </button>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
 
       <DelayMinutesModal
         open={isDelayModalOpen}
@@ -1456,7 +1548,7 @@ const EstimationConfirm = ({
         onCancel={() => setIsUpdateTableModalOpen(false)}
         onConfirm={() => {
           setIsUpdateTableModalOpen(false);
-          onGoToUpdateTable(isOpenPackageEstimation ? 2.5 : 5);
+          onGoToUpdateTable(isOpenPackageEstimation ? 2.5 : 4);
         }}
       />
     </>

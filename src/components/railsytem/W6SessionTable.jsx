@@ -11,6 +11,7 @@ import {
   serializeAddonServicesForCrm,
   serializeAdditionalServicesString,
 } from '../../utils/addonServices'
+import { toast } from 'sonner'
 
 const parseAmount = (value) => {
   if (value == null || value === '') return 0
@@ -107,9 +108,11 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
       .then(async () => {
         await updateRecord("Leads", leadRecord?.id, { Catalog_Sent: true })
         setLeadRecord({ ...leadRecord, Catalog_Sent: true })
+        toast.success("Deck sent successfully");
       })
       .catch((error) => {
         console.error('Error sending deck template:', error)
+        toast.error("Failed to send deck template");
       })
   }
 
@@ -141,16 +144,12 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
             W6 Session Table and Deck
           </h1>
         </div>
-        <p className="text-sm text-muted-foreground md:pb-1">Rev B</p>
       </div>
 
       <div className="surface-card space-y-6 p-4 md:space-y-7 md:p-7">
         <header className="rounded-2xl bg-primary px-4 py-4 text-primary-foreground md:px-6">
           <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-            <h2 className="text-lg font-semibold tracking-tight md:text-xl">KA - Session Table and Deck</h2>
-            <span className="text-sm text-primary-foreground/75 md:text-base">
-              the customised pitch deck, assembled live - Rev B
-            </span>
+            <h2 className="text-lg font-semibold tracking-tight md:text-xl">Session Table and Deck</h2>
           </div>
         </header>
 

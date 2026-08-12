@@ -69,7 +69,7 @@ const W0TheLeadRecord = ({
               Rail CRM flow
             </p>
             <h1 className="mt-1.5 text-2xl font-semibold text-foreground md:text-3xl">
-              W0 Lead Record
+              Lead Record
             </h1>
           </div>
         </div>

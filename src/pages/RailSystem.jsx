@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { PanelLeft } from "lucide-react";
+import { MessageCircle, PanelLeft } from "lucide-react";
 import { useZohoCrm } from "../context/ZohoCrmContext";
 import W0TheLeadRecord from "../components/railsytem/W0TheLeadRecord";
 import W1PitchLanguage from "../components/railsytem/W1PitchLanguage";
@@ -20,10 +20,70 @@ import JournyProgress from "../components/JournyProgress";
 import OpenCanvas from "../components/OpenCanvas";
 import Loader from "../components/Loader";
 
+/** Screen id → journey label (progress UI only). */
+const STEP_LABELS = {
+  0: "Lead Record",
+  1: "Discovery",
+  2: "Package",
+  2.5: "Customize",
+  3: "Requirement",
+  4: "Product Table",
+  5: "Session",
+  6: "Qualify",
+  7: "Dispatched",
+  11: "Package Deck",
+  // Preview placeholders before Discovery fork is chosen
+  "choose-path": "Choose Path",
+  build: "Build",
+};
+
+/**
+ * Linear journeys after Discovery forks:
+ * - package:           0 → 1 → 2 → 11 → 6 → 7
+ * - package-customize: 0 → 1 → 2 → 2.5 → 11 → 6 → 7
+ * - guided:            0 → 1 → 3 → 4 → 5 → 6 → 7
+ *
+ * Before the fork, show a full-length preview so users see more steps ahead.
+ */
+const JOURNEY_PATHS = {
+  undecided: [0, 1, "choose-path", "build", 6, 7],
+  package: [0, 1, 2, 11, 6, 7],
+  "package-customize": [0, 1, 2, 2.5, 11, 6, 7],
+  guided: [0, 1, 3, 4, 5, 6, 7],
+};
+
+const MAIN_JOURNEY_SCREENS = new Set([0, 1, 2, 2.5, 3, 4, 5, 6, 7, 11]);
+
+const buildProgressSteps = (path) =>
+  path.map((screenId) => ({
+    id: String(screenId),
+    screenId,
+    label: STEP_LABELS[screenId] ?? `Step ${screenId}`,
+  }));
+
+const inferJourneyFlow = (screenId) => {
+  if (screenId === 2.5) return "package-customize";
+  if (screenId === 11 || screenId === 2) return "package";
+  if ([3, 4, 5].includes(screenId)) return "guided";
+  // Shared qualify/dispatch screens — keep current flow when already set.
+  if ([6, 7].includes(screenId)) return null;
+  return "undecided";
+};
+
+const resolveJourneyFlow = (flow, screenId) => {
+  if (flow && flow !== "undecided") return flow;
+  const inferred = inferJourneyFlow(screenId);
+  if (inferred) return inferred;
+  // Ambiguous shared tail (6/7) with no prior fork — default package path for progress.
+  if ([6, 7].includes(screenId)) return "package";
+  return "undecided";
+};
+
 const RailSystem = () => {
   const { leadRecord, leadId, fetchLeadRecord, isLoading, error } =
     useZohoCrm();
   const [activeStep, setActiveStep] = useState(0);
+  const [journeyFlow, setJourneyFlow] = useState("undecided");
   const [selectedPackageId, setSelectedPackageId] = useState("");
   const [w5ReturnStep, setW5ReturnStep] = useState(2);
   const [w11ReturnStep, setW11ReturnStep] = useState(2);
@@ -147,72 +207,39 @@ const RailSystem = () => {
     [],
   );
 
-  const steps = useMemo(
-    () => [
-      {
-        id: "w0",
-        label: "Lead Record",
-      },
-      {
-        id: "w1",
-        label: "Discovery",
-      },
-      {
-        id: "w2",
-        label: "Package",
-      },
-      {
-        id: "w3",
-        label: "Requirement",
-      },
-      {
-        id: "w5",
-        label: "Product Table",
-      },
-      {
-        id: "w11",
-        label: "Package Deck",
-      },
-      {
-        id: "w6",
-        label: "Deck",
-      },
-      {
-        id: "w4",
-        label: "Qualify",
-      },
-      {
-        id: "w7",
-        label: "Dispatched",
-      },
-      {
-        id: "w8",
-        label: "Narration",
-      },
-      {
-        id: "w9",
-        label: "KB Resume",
-      },
-      {
-        id: "w10",
-        label: "Queue",
-      },
-      {
-        id: "kd",
-        label: "KD Exit",
-      },
-    ],
-    [],
+  const journeyPath =
+    JOURNEY_PATHS[resolveJourneyFlow(journeyFlow, activeStep)] ??
+    JOURNEY_PATHS.undecided;
+  const progressSteps = useMemo(
+    () => buildProgressSteps(journeyPath),
+    [journeyPath],
   );
+  const progressActiveIndex = Math.max(0, journeyPath.indexOf(activeStep));
+  const progressPercent =
+    ((progressActiveIndex + 1) / Math.max(progressSteps.length, 1)) * 100;
+  const showJourneyProgress = MAIN_JOURNEY_SCREENS.has(activeStep);
 
-  const goToStep = (index) => {
-    if (typeof index === "number") {
-      setActiveStep(index);
-    }
+  const goToStep = (screenId, nextFlow) => {
+    if (typeof screenId !== "number") return;
+    if (nextFlow) setJourneyFlow(nextFlow);
+    setActiveStep(screenId);
   };
 
-  const goBack = () => goToStep(activeStep - 1);
-  const progressPercent = ((activeStep + 1) / steps.length) * 100;
+  const goBackInFlow = () => {
+    const idx = journeyPath.indexOf(activeStep);
+    if (idx <= 0) return;
+
+    const prev = journeyPath[idx - 1];
+    if (prev <= 1) {
+      goToStep(prev, "undecided");
+      return;
+    }
+    if (activeStep === 2.5) {
+      goToStep(2, "package");
+      return;
+    }
+    goToStep(prev);
+  };
 
   const handleAddService = (service) => {
     setSelectedServices((prev) => {
@@ -228,40 +255,47 @@ const RailSystem = () => {
   const openCustomizePackage = (packageId) => {
     setSelectedPackageId(packageId);
     setW5ReturnStep(2);
-    goToStep(2.5); // Using a decimal to represent the customize step
+    goToStep(2.5, "package-customize");
   };
 
   const openW5From = (sourceStep) => {
     setW5ReturnStep(sourceStep);
-    goToStep(4);
+    goToStep(4, "guided");
   };
 
   const openW11From = (sourceStep) => {
     setW11ReturnStep(sourceStep);
-    goToStep(11);
+    const flow =
+      sourceStep === 2.5 || journeyFlow === "package-customize"
+        ? "package-customize"
+        : "package";
+    goToStep(11, flow);
   };
+
+  const enterPackageFlow = () => goToStep(2, "package");
+  const enterGuidedFlow = () => goToStep(3, "guided");
 
   const screenByStep = {
     0: (
       <W0TheLeadRecord
-        onStartDiscovery={() => goToStep(1)}
+        onStartDiscovery={() => goToStep(1, "undecided")}
         onResumeFollowUp={() => goToStep(8)}
         onExitDisposition={() => goToStep(12)}
       />
     ),
     1: (
       <W1PitchLanguage
-        onPackageNamed={() => goToStep(2)}
-        onGuideCustomer={() => goToStep(3)}
+        onPackageNamed={enterPackageFlow}
+        onGuideCustomer={enterGuidedFlow}
         onNotSalesCall={() => goToStep(12)}
-        onBack={goBack}
+        onBack={() => goToStep(0, "undecided")}
       />
     ),
     2: (
       <W2PackageCard
         onCatalogueConfirm={() => openW11From(2)}
         onCustomisePackage={() => {}}
-        onBack={goBack}
+        onBack={goBackInFlow}
         onSelectPackageForCustomization={(packageId) =>
           openCustomizePackage(packageId)
         }
@@ -276,12 +310,17 @@ const RailSystem = () => {
         onAddService={handleAddService}
         onRemoveService={handleRemoveService}
         onContinue={() => openW11From(2.5)}
-        onBack={() => goToStep(2)}
+        onBack={() => goToStep(2, "package")}
       />
     ),
     11: (
       <W11SendPackageDeck
-        onBack={() => goToStep(w11ReturnStep)}
+        onBack={() =>
+          goToStep(
+            w11ReturnStep,
+            w11ReturnStep === 2.5 ? "package-customize" : "package",
+          )
+        }
         onContinue={() => goToStep(6)}
       />
     ),
@@ -289,7 +328,7 @@ const RailSystem = () => {
       <W3GuidedRequirement
         onContinue={() => openW5From(3)}
         onNotSalesCall={() => goToStep(12)}
-        onBack={() => goToStep(1)}
+        onBack={() => goToStep(1, "undecided")}
       />
     ),
     4: (
@@ -309,7 +348,7 @@ const RailSystem = () => {
       <W4Qualify
         onSendEstimate={() => goToStep(7)}
         onAdjustItems={() => goToStep(4)}
-        onBack={goBack}
+        onBack={goBackInFlow}
         onBackToPackageDeck={() => goToStep(11)}
         onDecisionMakerModalContinue={() => goToStep(12)}
       />
@@ -318,25 +357,30 @@ const RailSystem = () => {
       <EstimationConfirm
         onApprove={() => goToStep(99)}
         onBack={() => goToStep(6)}
-        onGoToUpdateTable={(step) => goToStep(step)}
+        onGoToUpdateTable={(step) =>
+          goToStep(
+            step,
+            step === 2.5 ? "package-customize" : step === 4 ? "guided" : undefined,
+          )
+        }
       />
     ),
     8: <W8NarrationClose onFinishCall={() => goToStep(10)} />,
     9: (
       <W9KBResume
-        onSendSessionDeck={() => goToStep(5)}
+        onSendSessionDeck={() => goToStep(5, "guided")}
         onLogOutcome={() => goToStep(8)}
         onEscalateExit={() => goToStep(12)}
       />
     ),
     10: (
       <W10TheDeskQueue
-        onOpenLead={() => goToStep(0)}
-        onOpenNextBreach={() => goToStep(0)}
+        onOpenLead={() => goToStep(0, "undecided")}
+        onOpenNextBreach={() => goToStep(0, "undecided")}
       />
     ),
-    12: <NotASalesCall onBack={() => goToStep(0)} />,
-    99: <W99LastScreen onView={() => goToStep(0)} />,
+    12: <NotASalesCall onBack={() => goToStep(0, "undecided")} />,
+    99: <W99LastScreen onView={() => goToStep(0, "undecided")} />,
   };
 
   useEffect(() => {
@@ -348,9 +392,14 @@ const RailSystem = () => {
       if (Number.isNaN(stage)) return;
 
       // Advance UI from CRM updates, but don't pull user back to an older step.
-      setActiveStep((currentStep) =>
-        stage > currentStep ? stage : currentStep,
-      );
+      setActiveStep((currentStep) => (stage > currentStep ? stage : currentStep));
+
+      const inferred = inferJourneyFlow(stage);
+      if (inferred) {
+        setJourneyFlow((currentFlow) =>
+          currentFlow === "undecided" ? inferred : currentFlow,
+        );
+      }
     }
   }, [leadRecord?.Rail_Stage]);
 
@@ -376,21 +425,23 @@ const RailSystem = () => {
             <button
               type="button"
               onClick={() => setCanvasOpen(true)}
-              aria-label="Open canvas"
+              aria-label="Open DoubleTick"
               className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground shadow-soft transition hover:bg-secondary"
             >
-              <PanelLeft className="h-4 w-4" />
-              <span>Open Canvas</span>
+              <MessageCircle className="h-4 w-4" />
+              
+              <span>Open DoubleTick</span>
             </button>
           </div>
         )}
 
-        <JournyProgress
-          steps={steps}
-          activeStep={activeStep}
-          progressPercent={progressPercent}
-          onStepClick={goToStep}
-        />
+        {showJourneyProgress && (
+          <JournyProgress
+            steps={progressSteps}
+            activeStep={progressActiveIndex}
+            progressPercent={progressPercent}
+          />
+        )}
         {screenByStep[activeStep]}
       </div>
     </main>

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { updateRecord } from "../../api/zohoCrm";
 
-const LEAD_STATUS_OPTIONS = ["Junk", "Lost", "Nurturing", "Unreachable", "Job", "Marketing", "Vendor"];
+const LEAD_STATUS_OPTIONS = ["Junk", "Lost", "Nurturing", "Unreachable", "Job", "Marketing", "Vendor", "Follow Up Action"];
 
 const NotASalesCall = ({ onBack = () => {} }) => {
   const { leadRecord, leadId, fetchLeadRecord } = useZohoCrm();

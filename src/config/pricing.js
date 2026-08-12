@@ -3,8 +3,8 @@
  * Adjust here once — used across package customize, qualify, estimation, deck templates, etc.
  */
 export const ADDON_PRICES = {
-  armedBodyguard: 5000,
-  unarmedBodyguard: 3500,
-  luxuryVehicle: 10000,
-  standardVehicle: 6000,
+  armedBodyguard: 6000,
+  unarmedBodyguard: 3000,
+  luxuryVehicle: 27000,
+  standardVehicle: 8000,
 };
