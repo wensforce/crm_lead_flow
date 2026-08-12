@@ -798,6 +798,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
         Car_Requirements: carRows,
         Rail_Stage: "4",
         Catalog_Sent: false,
+        Lead_Status: "Guided Catalogue Sent",
       },
       ["workflow"],
     );

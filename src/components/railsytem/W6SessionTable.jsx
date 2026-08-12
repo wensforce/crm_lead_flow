@@ -50,10 +50,10 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
   const addonPricesDirty = addonServicesDirty(editableAddonServices, initialAddonServices)
 
   const armedCount = bodyguardRows.filter((row) =>
-    String(row.Bodyguard_Category || '').toLowerCase().includes('armed'),
+    String(row.Bodyguard_Category || '').toLowerCase() === 'armed bodyguard'
   ).length
   const unarmedCount = bodyguardRows.filter((row) =>
-    String(row.Bodyguard_Category || '').toLowerCase().includes('unarmed'),
+    String(row.Bodyguard_Category || '').toLowerCase() === 'unarmed bodyguard'
   ).length
   const luxuryCarCount = carRows.filter((row) => isLuxuryCar(row.Car_Type)).length
   const standardCarCount = carRows.length - luxuryCarCount
@@ -126,8 +126,8 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
       sendDeckTemplate()
     } else {
       if (leadRecord?.Rail_Stage !== "5" || leadRecord?.Open_Package_Estimation) {
-        await updateRecord("Leads", leadRecord?.id, { Rail_Stage: '5', Open_Package_Estimation: false })
-        setLeadRecord({ ...leadRecord, Rail_Stage: '5', Open_Package_Estimation: false })
+        await updateRecord("Leads", leadRecord?.id, { Rail_Stage: '5', Open_Package_Estimation: false, Lead_Status: "Deck Sent" })
+        setLeadRecord({ ...leadRecord, Rail_Stage: '5', Open_Package_Estimation: false, Lead_Status: "Deck Sent" })
       }
       onContinueToQualify()
     }

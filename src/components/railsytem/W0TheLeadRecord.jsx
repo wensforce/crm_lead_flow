@@ -39,6 +39,7 @@ const W0TheLeadRecord = ({
         setLoading(true);
         await updateRecord("Leads", leadId, {
           Preferred_Language: selectedLanguage,
+          Lead_Status: "Contacted",
           Rail_Stage: "0",
         });
         await fetchLeadRecord(leadId);
@@ -138,7 +139,7 @@ const W0TheLeadRecord = ({
               onClick={handleStartDiscovery}
               className="btn-primary min-h-12 min-w-44"
             >
-              Start Discovery Call (KA)
+              Start Discovery Call
             </button>
             {/* <button
               type="button"

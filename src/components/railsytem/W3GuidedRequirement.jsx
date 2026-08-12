@@ -395,6 +395,7 @@ const W3GuidedRequirement = ({
           Special_Requirements: formData.specialRequirement,
           Addon_Service: serializeAddonServicesForCrm(addonServices),
           Rail_Stage: "3",
+          Lead_Status: "Service Discovered",
         });
         await fetchLeadRecord(leadRecord?.id);
         setInitialAddonServices(addonServices);

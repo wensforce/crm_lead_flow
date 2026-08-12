@@ -602,9 +602,9 @@ const EstimationConfirm = ({
       });
 
       let payload = {
-        Estimation_Approval_Send: true,
         Is_Estimation_Approved: true,
         Rail_Stage: "7",
+        Lead_Status: "Manager Approved Estimate",
       };
 
       if (isDirty && !isOpenPackageEstimation) {

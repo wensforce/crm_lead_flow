@@ -135,6 +135,7 @@ const W2PackageCard = ({
           Package_Id: selectedPackageId,
           Package_Template_Sent: true,
           Package_Name: selectedPackage?.Title || "",
+          Lead_Status: "Catalogue Sent",
         });
         await fetchLeadRecord(leadRecord?.id);
         onCatalogueConfirm();

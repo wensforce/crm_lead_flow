@@ -329,7 +329,9 @@ const W4Qualify = ({
       Priority: purchasePotential,
       Customer_confirmed_deck: JSON.stringify(isCatalogConfirmedOnCall),
       Estimate_Deadline_At: formatZohoDateTime(new Date(Date.now() + 15 * 60 * 1000)),
+      Estimation_Approval_Send: true,
       Rail_Stage: '7',
+      Lead_Status: "Agent Sent Estimate",
     }
 
 

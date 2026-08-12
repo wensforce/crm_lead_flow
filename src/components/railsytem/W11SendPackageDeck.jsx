@@ -176,7 +176,7 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
       return
     }
     if (leadRecord?.Rail_Stage !== '11' || leadRecord?.Open_Package_Estimation !== true) {
-      await updateRecord('Leads', leadRecord?.id, { Rail_Stage: '11', Open_Package_Estimation: true })
+      await updateRecord('Leads', leadRecord?.id, { Rail_Stage: '11', Open_Package_Estimation: true, Lead_Status: "Deck Sent" })
       await fetchLeadRecord(leadRecord?.id)
     }
     await onContinue()
