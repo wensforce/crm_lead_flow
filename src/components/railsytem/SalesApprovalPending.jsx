@@ -34,7 +34,7 @@ const SalesApprovalPending = ({ onBack = () => {} }) => {
         <p className="text-sm text-muted-foreground md:pb-1">sales view</p>
       </div>
 
-      <div className="surface-card flex min-h-[420px] flex-col items-center justify-center p-6 text-center md:p-10">
+      <div className="surface-card flex min-h-105 flex-col items-center justify-center p-6 text-center md:p-10">
         <div className="flex h-16 w-16 items-center justify-center rounded-full border border-amber-300 bg-amber-50 text-amber-700">
           <Clock3 size={28} />
         </div>
