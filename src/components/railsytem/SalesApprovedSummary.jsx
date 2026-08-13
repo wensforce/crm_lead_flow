@@ -10,12 +10,6 @@ import {
 } from "lucide-react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { getRecord } from "../../api/zohoCrm";
-import { ADDON_PRICES } from "../../config/pricing";
-
-const toInt = (value) => {
-  const number = Number(value);
-  return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : 0;
-};
 
 const parsePrice = (value) => {
   if (value == null || value === "") return 0;
@@ -48,14 +42,6 @@ const formatMoney = (value) => {
   return "Rs. " + Number(value || 0).toLocaleString("en-IN");
 };
 
-const toBooleanFlag = (value) => {
-  if (typeof value === "boolean") return value;
-  const normalized = String(value ?? "")
-    .trim()
-    .toLowerCase();
-  return normalized === "true" || normalized === "yes" || normalized === "1";
-};
-
 const SalesApprovedSummary = ({ onBack = () => {} }) => {
   const { leadRecord } = useZohoCrm();
   const [selectedPackage, setSelectedPackage] = useState(null);
@@ -64,10 +50,6 @@ const SalesApprovedSummary = ({ onBack = () => {} }) => {
     typeof leadRecord?.Package_Id === "object"
       ? leadRecord?.Package_Id?.id || leadRecord?.Package_Id?.ID || ""
       : leadRecord?.Package_Id || "";
-
-  const isOpenPackageEstimation = useMemo(() => {
-    return toBooleanFlag(leadRecord?.Open_Package_Estimation);
-  }, [leadRecord?.Open_Package_Estimation]);
 
   useEffect(() => {
     if (!packageRecordId) {
@@ -115,72 +97,12 @@ const SalesApprovedSummary = ({ onBack = () => {} }) => {
 
   const guidedGrandTotal = guidedBodyguardTotal + guidedCarTotal;
 
-  const estimationStart = useMemo(() => {
-    if (isOpenPackageEstimation) {
-      return parsePrice(leadRecord?.Package_Estimation_Start);
-    }
-    return parsePrice(leadRecord?.Estimation_Range_Start);
-  }, [
-    isOpenPackageEstimation,
-    leadRecord?.Package_Estimation_Start,
-    leadRecord?.Estimation_Range_Start,
-  ]);
+  const hasGuidedDetails =
+    bodyguardRows.length > 0 || carRows.length > 0;
+  const hasPackageOption = Boolean(packageRecordId);
 
-  const estimationEnd = useMemo(() => {
-    if (isOpenPackageEstimation) {
-      return parsePrice(leadRecord?.Package_Estimation_End);
-    }
-    return parsePrice(leadRecord?.Estimation_Range_End);
-  }, [
-    isOpenPackageEstimation,
-    leadRecord?.Package_Estimation_End,
-    leadRecord?.Estimation_Range_End,
-  ]);
-
-  const computedStartPrice = useMemo(() => {
-    const guidedTotal = guidedGrandTotal;
-
-    const packageBasePrice = parsePrice(selectedPackage?.Price);
-    const additionalArmed = toInt(leadRecord?.Additional_Armed);
-    const additionalUnarmed = toInt(leadRecord?.Additional_Unarmed);
-    const additionalLuxury = toInt(leadRecord?.Additional_Luxury_Car);
-    const additionalStandard = toInt(leadRecord?.Additional_Standard_Car);
-    const additionalServices = parseAdditionalServices(
-      leadRecord?.Additional_Services,
-    );
-    const additionalServicesTotal = additionalServices.reduce(
-      (sum, service) => sum + service.price,
-      0,
-    );
-
-    const packageTotal =
-      packageBasePrice +
-      additionalArmed * ADDON_PRICES.armedBodyguard +
-      additionalUnarmed * ADDON_PRICES.unarmedBodyguard +
-      additionalLuxury * ADDON_PRICES.luxuryVehicle +
-      additionalStandard * ADDON_PRICES.standardVehicle +
-      additionalServicesTotal;
-
-    if (estimationStart > 0) return estimationStart;
-    if (isOpenPackageEstimation && packageTotal > 0) return packageTotal;
-    if (guidedTotal > 0) return guidedTotal;
-    return packageTotal;
-  }, [
-    estimationStart,
-    guidedGrandTotal,
-    selectedPackage?.Price,
-    isOpenPackageEstimation,
-    leadRecord?.Additional_Armed,
-    leadRecord?.Additional_Unarmed,
-    leadRecord?.Additional_Luxury_Car,
-    leadRecord?.Additional_Standard_Car,
-    leadRecord?.Additional_Services,
-  ]);
-
-  const endingPrice = useMemo(() => {
-    if (estimationEnd > 0) return estimationEnd;
-    return Math.round(computedStartPrice * 1.35);
-  }, [estimationEnd, computedStartPrice]);
+  const estimationRangeStart = parsePrice(leadRecord?.Estimation_Range_Start);
+  const estimationRangeEnd = parsePrice(leadRecord?.Estimation_Range_End);
 
   const additionalServices = useMemo(
     () => parseAdditionalServices(leadRecord?.Additional_Services),
@@ -262,33 +184,35 @@ const SalesApprovedSummary = ({ onBack = () => {} }) => {
           </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-4 md:p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Product Details
-          </p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
-              <p className="text-xs text-muted-foreground">Armed bodyguards</p>
-              <p className="mt-1 text-lg font-bold text-foreground">
-                {armedCount}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
-              <p className="text-xs text-muted-foreground">Unarmed bodyguards</p>
-              <p className="mt-1 text-lg font-bold text-foreground">
-                {unarmedCount}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
-              <p className="text-xs text-muted-foreground">Total cars</p>
-              <p className="mt-1 text-lg font-bold text-foreground">
-                {totalCars}
-              </p>
+        {hasGuidedDetails ? (
+          <div className="rounded-xl border border-border bg-card p-4 md:p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Product Details
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Armed bodyguards</p>
+                <p className="mt-1 text-lg font-bold text-foreground">
+                  {armedCount}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Unarmed bodyguards</p>
+                <p className="mt-1 text-lg font-bold text-foreground">
+                  {unarmedCount}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Total cars</p>
+                <p className="mt-1 text-lg font-bold text-foreground">
+                  {totalCars}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
 
-        {(bodyguardRows.length > 0 || carRows.length > 0) && (
+        {hasGuidedDetails ? (
           <div className="rounded-xl border border-border bg-card p-4 md:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -367,9 +291,7 @@ const SalesApprovedSummary = ({ onBack = () => {} }) => {
               </div>
             )}
           </div>
-        )}
-
-        {packageRecordId && (
+        ) : hasPackageOption ? (
           <div className="rounded-xl border border-border bg-card p-4 md:p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Package Option
@@ -406,34 +328,26 @@ const SalesApprovedSummary = ({ onBack = () => {} }) => {
               )}
             </div>
           </div>
-        )}
-
-        <div className="rounded-xl border border-border bg-card p-4 md:p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Call Recording (Audio)
-          </p>
-          <div className="mt-3">
-            {callRecordingUrl ? (
-              <div className="space-y-2">
-                <div className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Mic size={16} /> Recording attached
-                </div>
-                <audio controls src={callRecordingUrl} className="w-full" />
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                <Mic size={16} /> Recording not available
-              </div>
-            )}
+        ) : (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-4 text-amber-900 md:px-5">
+            <p className="text-sm font-semibold">
+              No any services selected.
+            </p>
+            <p className="mt-1 text-sm text-amber-800/90">
+              This lead has no guided custom items or package option on record.
+            </p>
           </div>
-        </div>
+        )}
 
         <div className="rounded-2xl border border-border bg-white px-6 py-5 md:px-8 md:py-6">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
             Estimation Range
           </p>
           <p className="text-2xl font-bold tracking-tight text-gray-900 md:text-3xl">
-            {formatMoney(computedStartPrice)} &ndash; {formatMoney(endingPrice)}
+            {estimationRangeEnd > 0 &&
+            estimationRangeEnd !== estimationRangeStart
+              ? `${formatMoney(estimationRangeStart)} – ${formatMoney(estimationRangeEnd)}`
+              : formatMoney(estimationRangeStart)}
           </p>
         </div>
 

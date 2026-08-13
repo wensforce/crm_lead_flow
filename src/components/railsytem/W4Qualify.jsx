@@ -247,16 +247,8 @@ const W4Qualify = ({
       bookingFieldsInitializedRef.current = true
     }
 
-    const savedStart = Number(
-      openPackage
-        ? leadRecord.Package_Estimation_Start
-        : leadRecord.Estimation_Range_Start,
-    )
-    const savedEnd = Number(
-      openPackage
-        ? leadRecord.Package_Estimation_End
-        : leadRecord.Estimation_Range_End,
-    )
+    const savedStart = Number( leadRecord.Estimation_Range_Start)
+    const savedEnd = Number( leadRecord.Estimation_Range_End)
     if (savedStart > 0 && savedEnd > 0) {
       setBandMarkup(Math.max(0, Math.round((savedEnd / savedStart - 1) * 100)))
     } else if (
@@ -333,6 +325,9 @@ const W4Qualify = ({
       Estimation_Sent: true,
       Estimate_DeadlineAt: formatZohoDateTime(new Date(Date.now() + 15 * 60 * 1000)),
       Estimation_Sent_At: formatZohoDateTime(new Date()),
+      Estimation_Range_Start: pricingSummary.startPrice,
+      Estimation_Range_End:  packageUsesRange ? budgetBand.rawEnd : 0,
+      Estimation_Percentage: crmBookingPercentage,
       ApprovalStatus: 'Pending',
       Rail_Stage: '7',
       Lead_Status: "Agent Sent Estimate",
@@ -343,17 +338,6 @@ const W4Qualify = ({
       payload = {
         ...payload,
         Package_Estimation_Send: true,
-        Package_Estimation_Start: pricingSummary.startPrice,
-        // Fixed rate (no addons): only start. Range (with addons): start + end.
-        Package_Estimation_End: packageUsesRange ? budgetBand.rawEnd : 0,
-        Estimate_Package_Percentage: crmBookingPercentage,
-      }
-    } else {
-      payload = {
-        ...payload,
-        Estimation_Range_Start: pricingSummary.startPrice,
-        Estimation_Range_End: budgetBand.rawEnd,
-        Estimation_Percentage: crmBookingPercentage,
       }
     }
 

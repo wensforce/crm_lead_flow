@@ -11,6 +11,7 @@ import {
   Pencil,
   Clock3,
   PauseCircle,
+  Link,
 } from "lucide-react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { getRecord, updateRecord } from "../../api/zohoCrm";
@@ -182,10 +183,6 @@ const EstimationConfirm = ({
   const convertZohoWorkDriveURL = (url) => {
     if (!url) return "";
     const id = String(url).split("https://workdrive.zoho.in/file/")[1];
-    console.log(
-      "id",
-      `https://download-accl.zoho.in/v1/workdrive/previewdata/${id}`,
-    );
     setExotelRecordingUrl(
       `https://download-accl.zoho.in/v1/workdrive/previewdata/${id}`,
     );
@@ -1362,6 +1359,7 @@ const EstimationConfirm = ({
                     <Mic size={16} /> Recording attached
                   </div>
                   <audio controls src={callRecordingUrl} className="w-full" />
+                  <a className="text-sm inline-flex items-center gap-2 underline text-blue-500" href={callRecordingUrl} target="_blank" rel="noopener noreferrer"> <Link size={16} /> Open Recording</a>
                 </div>
               </div>
             )}

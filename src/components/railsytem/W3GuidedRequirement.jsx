@@ -499,9 +499,9 @@ const W3GuidedRequirement = ({
                 <option value="None" disabled>
                   None
                 </option>
-                <option value="One-time-event">One-time event</option>
-                <option value="Recurring-service">Recurring service</option>
-                <option value="On-demand-support">On-demand support</option>
+                <option value="Premium">Premium</option>
+                <option value="Volume">Volume</option>
+                <option value="Standard">Standard</option>
               </select>
             </div>
 
@@ -766,10 +766,9 @@ const W3GuidedRequirement = ({
                     <option value="None" disabled>
                       None
                     </option>
-                    <option value="Point-to-point transfer">Point-to-point transfer</option>
-                    <option value="Hourly duty slot">Hourly duty slot</option>
-                    <option value="Full-day duty">Full-day duty</option>
-                    <option value="Multi-day retained vehicle">Multi-day retained vehicle</option>
+                    <option value="80 Km / 8 Hours">80 Km / 8 Hours</option>
+                    <option value="120 Km / 12 Hours">120 Km / 12 Hours</option>
+                    <option value="300 Km / 24 Hours">300 Km / 24 Hours</option>
                   </select>
                 </div>
               </div>

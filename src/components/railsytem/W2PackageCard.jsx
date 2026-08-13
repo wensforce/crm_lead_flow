@@ -38,6 +38,7 @@ const W2PackageCard = ({
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   const [templateError, setTemplateError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [serviceCity, setServiceCity] = useState("");
   const selectedPackage = packagesData.find(
     (pkg) => pkg.id === selectedPackageId,
   );
@@ -127,19 +128,28 @@ const W2PackageCard = ({
   const handleCatalogueConfirm = async () => {
     if (!isTemplateSent) return;
 
+    if (!serviceCity.trim()) {
+      toast.error("Service city is required");
+      return;
+    }
+
     try {
       setLoading(true);
+      const payload = {
+        Service_City: serviceCity.trim(),
+      };
+
       if (leadRecord?.Package_Id !== selectedPackageId) {
-        await updateRecord("Leads", leadRecord?.id, {
+        Object.assign(payload, {
           Rail_Stage: "2",
           Package_Id: selectedPackageId,
           Package_Template_Sent: true,
           Package_Name: selectedPackage?.Title || "",
           Lead_Status: "Catalogue Sent",
         });
-        await fetchLeadRecord(leadRecord?.id);
-        onCatalogueConfirm();
       }
+      await updateRecord("Leads", leadRecord?.id, payload);
+      await fetchLeadRecord(leadRecord?.id);
       onCatalogueConfirm();
     } catch (error) {
       console.error("Error confirming catalog:", error);
@@ -156,8 +166,33 @@ const W2PackageCard = ({
     }
     if (leadRecord) {
       setSelectedPackageId(leadRecord?.Package_Id || "");
+      setServiceCity(leadRecord?.Service_City || "");
     }
   }, [leadRecord]);
+
+  const handleCustomisePackage = async () => {
+    if (!selectedPackageId) return;
+
+    if (!serviceCity.trim()) {
+      toast.error("Service city is required");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await updateRecord("Leads", leadRecord?.id, {
+        Service_City: serviceCity.trim(),
+      });
+      await fetchLeadRecord(leadRecord?.id);
+      onSelectPackageForCustomization(selectedPackageId);
+      onCustomisePackage();
+    } catch (error) {
+      console.error("Error saving service city:", error);
+      toast.error("Failed to save service city. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
@@ -209,6 +244,24 @@ const W2PackageCard = ({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="space-y-2.5">
+            <label
+              htmlFor="w2-service-city"
+              className="text-sm font-medium text-foreground"
+            >
+              Service city <span className="text-destructive">*</span>
+            </label>
+            <input
+              id="w2-service-city"
+              type="text"
+              value={serviceCity}
+              onChange={(event) => setServiceCity(event.target.value)}
+              required
+              className="ui-input h-12 text-sm"
+              placeholder="Enter service city"
+            />
           </div>
 
           <div className="space-y-2.5">
@@ -437,10 +490,7 @@ const W2PackageCard = ({
             <button
               type="button"
               disabled={!selectedPackageId}
-              onClick={() => {
-                onSelectPackageForCustomization(selectedPackageId);
-                onCustomisePackage();
-              }}
+              onClick={handleCustomisePackage}
               className="btn-secondary min-h-12 min-w-56 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Customise package

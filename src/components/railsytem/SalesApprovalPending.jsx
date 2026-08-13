@@ -1,7 +1,25 @@
-import React from "react";
-import { Clock3 } from "lucide-react";
+import React, { useState } from "react";
+import { Clock3, RefreshCcw } from "lucide-react";
+import { useZohoCrm } from "../../context/ZohoCrmContext";
+import { toast } from "sonner";
 
 const SalesApprovalPending = ({ onBack = () => {} }) => {
+  const { fetchLeadRecord, leadRecord } = useZohoCrm();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (!leadRecord?.id || isRefreshing) return;
+
+    setIsRefreshing(true);
+    try {
+      await fetchLeadRecord(leadRecord.id);
+    } catch {
+      toast.error("Error refreshing lead record");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
     <section className="mx-auto w-full max-w-6xl px-4 py-8 md:px-8 md:py-12">
       <div className="mb-7 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -24,17 +42,32 @@ const SalesApprovalPending = ({ onBack = () => {} }) => {
           Approval Pending
         </h2>
         <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-          Your estimation has been submitted and is waiting for manager approval.
-          You will see the full summary here once it is approved.
+          Your estimation has been submitted and is waiting for manager
+          approval. You will see the full summary here once it is approved.
         </p>
 
-        <button
-          type="button"
-          onClick={onBack}
-          className="btn-secondary mt-8 min-h-12 min-w-28"
-        >
-          Back
-        </button>
+        <div className="flex items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="btn-secondary mt-8 min-h-12 min-w-28 flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCcw
+              size={16}
+              className={`mr-2 ${isRefreshing ? "animate-spin" : ""}`}
+            />
+            {isRefreshing ? "Refreshing..." : "Refresh"}
+          </button>
+
+          <button
+            type="button"
+            onClick={onBack}
+            className="btn-secondary mt-8 min-h-12 min-w-28"
+          >
+            Back
+          </button>
+        </div>
       </div>
     </section>
   );

@@ -40,6 +40,7 @@ const W2Part2PackageCustomize = ({
   const [validationError, setValidationError] = useState("");
   const [templateSent, setTemplateSent] = useState(false);
   const [isSendingTemplate, setIsSendingTemplate] = useState(false);
+  const [serviceCity, setServiceCity] = useState("");
 
   // Customization state - track what's added/removed from base package
   const [addedArmedBodyguards, setAddedArmedBodyguards] = useState(0);
@@ -53,6 +54,7 @@ const W2Part2PackageCustomize = ({
     unarmedBodyguards: 0,
     luxuryVehicles: 0,
     standardVehicles: 0,
+    serviceCity: "",
   });
 
   // Fetch selected package when selectedPackageId changes
@@ -96,6 +98,7 @@ const W2Part2PackageCustomize = ({
       addedUnarmedBodyguards !== initialAddons.unarmedBodyguards ||
       addedLuxuryVehicles !== initialAddons.luxuryVehicles ||
       addedStandardVehicles !== initialAddons.standardVehicles ||
+      serviceCity.trim() !== (initialAddons.serviceCity || "").trim() ||
       selectedServices !== initialAddons.services
     );
   }, [
@@ -103,6 +106,7 @@ const W2Part2PackageCustomize = ({
     addedUnarmedBodyguards,
     addedLuxuryVehicles,
     addedStandardVehicles,
+    serviceCity,
     selectedServices,
     initialAddons,
   ]);
@@ -120,11 +124,13 @@ const W2Part2PackageCustomize = ({
         unarmedBodyguards: leadRecord.Additional_Unarmed || 0,
         luxuryVehicles: leadRecord.Additional_Luxury_Car || 0,
         standardVehicles: leadRecord.Additional_Standard_Car || 0,
+        serviceCity: leadRecord.Service_City || "",
         services: getLeadAddonServices(leadRecord),
       };
       // Do not overwrite selected package with empty CRM value.
       setSelectedPackageId((prev) => prev || leadPackageId || "");
       setInitialAddons(saved);
+      setServiceCity(saved.serviceCity);
       setAddedArmedBodyguards(saved.armedBodyguards);
       setAddedUnarmedBodyguards(saved.unarmedBodyguards);
       setAddedLuxuryVehicles(saved.luxuryVehicles);
@@ -137,6 +143,7 @@ const W2Part2PackageCustomize = ({
     if (!selectedPackageId) return "Please select a package first";
     if (!selectedPackage || Object.keys(selectedPackage).length === 0)
       return "Package data is still loading, please wait";
+    if (!serviceCity.trim()) return "Service city is required";
     return null;
   };
 
@@ -190,6 +197,13 @@ const W2Part2PackageCustomize = ({
 
   const handleContinue = async () => {
     try {
+      const error = validateForm();
+      if (error) {
+        setValidationError(error);
+        return;
+      }
+      setValidationError("");
+
       if (!isDirty) {
         onContinue();
         return;
@@ -203,6 +217,7 @@ const W2Part2PackageCustomize = ({
         Additional_Standard_Car: addedStandardVehicles,
         Additional_Services: serializeAdditionalServicesString(selectedServices),
         Addon_Service: serializeAddonServicesForCrm(selectedServices),
+        Service_City: serviceCity.trim(),
         Rail_Stage: "2.5",
       });
       await fetchLeadRecord(leadRecord?.id);
@@ -258,6 +273,24 @@ const W2Part2PackageCustomize = ({
                     Base Package Price: {formatPrice(basePrice)}
                   </p>
                 </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <label
+                  htmlFor="w2p2-service-city"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Service city <span className="text-destructive">*</span>
+                </label>
+                <input
+                  id="w2p2-service-city"
+                  type="text"
+                  value={serviceCity}
+                  onChange={(event) => setServiceCity(event.target.value)}
+                  required
+                  className="ui-input h-12 text-sm"
+                  placeholder="Enter service city"
+                />
               </div>
 
               {/* Package Details */}

@@ -170,17 +170,30 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
   }
 
   const handleContinue = async () => {
+    if (isSendingDeck || !isDeckSent) return
+
     setLoading(true)
-    if (isSendingDeck || !isDeckSent) {
+    try {
+      const needsStageUpdate =
+        String(leadRecord?.Rail_Stage) !== '6' ||
+        leadRecord?.Open_Package_Estimation !== true
+
+      if (needsStageUpdate) {
+        await updateRecord('Leads', leadRecord?.id, {
+          Rail_Stage: '6',
+          Open_Package_Estimation: true,
+          Lead_Status: 'Deck Sent',
+        })
+        await fetchLeadRecord(leadRecord?.id)
+      }
+
+      onContinue()
+    } catch (error) {
+      console.error('Failed to continue from W11:', error)
+      toast.error('Failed to save progress. Please try again.')
+    } finally {
       setLoading(false)
-      return
     }
-    if (leadRecord?.Rail_Stage !== '11' || leadRecord?.Open_Package_Estimation !== true) {
-      await updateRecord('Leads', leadRecord?.id, { Rail_Stage: '11', Open_Package_Estimation: true, Lead_Status: "Deck Sent" })
-      await fetchLeadRecord(leadRecord?.id)
-    }
-    await onContinue()
-    setLoading(false)
   }
 
   const totalBaseCars = hasBaseCar ? 1 : 0

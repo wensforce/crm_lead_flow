@@ -52,7 +52,7 @@ const OpenCanvas = ({ open = false, onClose = () => {} }) => {
           <div className="flex h-full flex-1 items-center justify-center bg-card">
             <iframe
               className="h-full w-full"
-              src={`https://enterprise.doubletick.io/embed/conversations/917304607954/${leadPhone}?showSidebar=false&showChatFilters=false&showCustomerDetails=false&showChatListPanel=false&embed=true`}
+              src={`https://enterprise.doubletick.io/embed/conversations/917304607954/${leadPhone}?showSidebar=false&showChatFilters=false&showCustomerDetails=false&showChatListPanel=false&embed=false`}
               title="Lead conversation"
               frameBorder="0"
             />
