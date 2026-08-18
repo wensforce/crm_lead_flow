@@ -286,11 +286,6 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
   const roleName = String(currentUser?.role?.name || "")
     .trim()
     .toLowerCase();
-  const isCeo = roleName === "ceo" || roleName === "manager";
-
-  const handleConnectToCustomer = async () => {
-    toast.info("This feature is not available yet");
-  };
 
   const armedHintCount = toCount(leadRecord?.No_of_Armed_Personnel);
   const unarmedHintCount = toCount(leadRecord?.No_of_UnArmed_Personnel);
@@ -1719,15 +1714,6 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
               "Continue to qualify"
             )}
           </button>
-          {isCeo && (
-            <button
-              type="button"
-              onClick={handleConnectToCustomer}
-              className="btn-secondary min-h-12 min-w-48"
-            >
-              Connect To Customer
-            </button>
-          )}
           <button
             type="button"
             onClick={onBack}

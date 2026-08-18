@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { MessageCircle, PanelLeft } from "lucide-react";
+import { Loader2, MessageCircle, PanelLeft, Phone } from "lucide-react";
 import { useZohoCrm } from "../context/ZohoCrmContext";
 import W0TheLeadRecord from "../components/railsytem/W0TheLeadRecord";
 import W1PitchLanguage from "../components/railsytem/W1PitchLanguage";
@@ -19,6 +19,8 @@ import NotASalesCall from "../components/railsytem/NotASalesCall";
 import JournyProgress from "../components/JournyProgress";
 import OpenCanvas from "../components/OpenCanvas";
 import Loader from "../components/Loader";
+import { connectToCustomer } from "../api/zohoCrm";
+import { toast } from "sonner";
 
 /** Screen id → journey label (progress UI only). */
 const STEP_LABELS = {
@@ -89,6 +91,7 @@ const RailSystem = () => {
   const [w11ReturnStep, setW11ReturnStep] = useState(2);
   const [selectedServices, setSelectedServices] = useState([]);
   const [canvasOpen, setCanvasOpen] = useState(false);
+  const [connectToCustomerLoading, setConnectToCustomerLoading] = useState(false);
 
   const packageCatalog = useMemo(
     () => [
@@ -275,6 +278,17 @@ const RailSystem = () => {
   const enterPackageFlow = () => goToStep(2, "package");
   const enterGuidedFlow = () => goToStep(3, "guided");
 
+  const handleConnectToCustomer = async () => {
+    setConnectToCustomerLoading(true);
+    const response = await connectToCustomer(leadId);
+    if (response.code === "success") {
+      toast.success(response.details.output || "Call initiated successfully");
+    } else {
+      toast.error(response.details.output || "Failed to initiate call");
+    }
+    setConnectToCustomerLoading(false);
+  };
+
   const screenByStep = {
     0: (
       <W0TheLeadRecord
@@ -421,16 +435,26 @@ const RailSystem = () => {
 
       <div className="relative min-w-0 flex-1 transition-[width] duration-300 ml-0 mr-auto ">
         {!canvasOpen && (
-          <div className="sticky top-0 z-30 flex px-4 pt-4 md:px-8">
+          <div className="sticky top-0 z-30 flex gap-2 px-4 pt-4 md:px-8">
             <button
               type="button"
               onClick={() => setCanvasOpen(true)}
               aria-label="Open DoubleTick"
-              className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground shadow-soft transition hover:bg-secondary"
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-3 text-xs font-medium text-foreground shadow-soft transition hover:bg-secondary hover:scale-95 duration-300 cursor-pointer"
             >
               <MessageCircle className="h-4 w-4" />
               
               <span>Open DoubleTick</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleConnectToCustomer}
+              aria-label="Connect to Customer"
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-[#000000] text-white px-3 py-3 text-xs font-medium shadow-soft transition hover:bg-[#1a1a1a] hover:scale-95 duration-300 cursor-pointer"
+            >
+              
+              {connectToCustomerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Phone className="h-4 w-4" />}
+              <span>{connectToCustomerLoading ? "Connecting..." : "Connect to Customer"}</span>
             </button>
           </div>
         )}

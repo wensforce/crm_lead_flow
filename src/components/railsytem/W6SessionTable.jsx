@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { updateRecord } from '../../api/zohoCrm'
 import { useZohoCrm } from '../../context/ZohoCrmContext'
 import useSendDeckTemplate from '../../hooks/useSendDeckTemplate'
-import EditableAddonServicesList from './EditableAddonServicesList'
+import AddOnServicesPicker from './AddOnServicesPicker'
 import {
   addonServicesDirty,
   addonServicesTotal,
@@ -12,6 +12,7 @@ import {
   serializeAdditionalServicesString,
 } from '../../utils/addonServices'
 import { toast } from 'sonner'
+import Loader from '../Loader'
 
 const parseAmount = (value) => {
   if (value == null || value === '') return 0
@@ -39,6 +40,7 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
   const [editableAddonServices, setEditableAddonServices] = useState([])
   const [initialAddonServices, setInitialAddonServices] = useState([])
   const [isSavingAddons, setIsSavingAddons] = useState(false)
+  const [isCrmUpdating, setIsCrmUpdating] = useState(false)
 
   useEffect(() => {
     const loaded = cloneAddonServices(getLeadAddonServices(leadRecord))
@@ -47,7 +49,20 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
   }, [leadRecord?.Addon_Service, leadRecord?.Additional_Services])
 
   const addonTotal = addonServicesTotal(editableAddonServices)
-  const addonPricesDirty = addonServicesDirty(editableAddonServices, initialAddonServices)
+  const addonServicesChanged = addonServicesDirty(editableAddonServices, initialAddonServices)
+
+  const handleAddAddonService = (service) => {
+    setEditableAddonServices((prev) => {
+      if (prev.some((item) => item.id === service.id)) return prev
+      return [...prev, service]
+    })
+  }
+
+  const handleRemoveAddonService = (serviceId) => {
+    setEditableAddonServices((prev) =>
+      prev.filter((service) => service.id !== serviceId),
+    )
+  }
 
   const armedCount = bodyguardRows.filter((row) =>
     String(row.Bodyguard_Category || '').toLowerCase() === 'armed bodyguard'
@@ -78,10 +93,10 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
     )
   }
 
-  const saveAddonPrices = async () => {
+  const saveAddonServices = async ({ manageLoading = true } = {}) => {
     if (!leadRecord?.id || isSavingAddons) return false
 
-    setIsSavingAddons(true)
+    if (manageLoading) setIsSavingAddons(true)
     try {
       const serialized = serializeAddonServicesForCrm(editableAddonServices)
       await updateRecord('Leads', leadRecord.id, {
@@ -91,12 +106,14 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
       await fetchLeadRecord(leadRecord.id)
       const saved = cloneAddonServices(editableAddonServices)
       setInitialAddonServices(saved)
+      toast.success('Add-on services saved')
       return true
     } catch (error) {
-      console.error('Error saving add-on service prices:', error)
+      console.error('Error saving add-on services:', error)
+      toast.error('Failed to save add-on services')
       return false
     } finally {
-      setIsSavingAddons(false)
+      if (manageLoading) setIsSavingAddons(false)
     }
   }
 
@@ -117,24 +134,54 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
   }
 
   const handleContinueToQualify = async () => {
-    if (isSendingDeck) return
-    if (addonPricesDirty) {
-      const saved = await saveAddonPrices()
-      if (!saved) return
-    }
+    if (isSendingDeck || isCrmUpdating) return
+
     if (!isDeckSent) {
       sendDeckTemplate()
-    } else {
-      if (leadRecord?.Rail_Stage !== "5" || leadRecord?.Open_Package_Estimation) {
-        await updateRecord("Leads", leadRecord?.id, { Rail_Stage: '5', Open_Package_Estimation: false, Lead_Status: "Deck Sent" })
-        setLeadRecord({ ...leadRecord, Rail_Stage: '5', Open_Package_Estimation: false, Lead_Status: "Deck Sent" })
-      }
+      return
+    }
+
+    const needsStageUpdate =
+      leadRecord?.Rail_Stage !== '5' || leadRecord?.Open_Package_Estimation
+
+    if (!addonServicesChanged && !needsStageUpdate) {
       onContinueToQualify()
+      return
+    }
+
+    setIsCrmUpdating(true)
+    try {
+      if (addonServicesChanged) {
+        const saved = await saveAddonServices({ manageLoading: false })
+        if (!saved) return
+      }
+
+      if (needsStageUpdate) {
+        await updateRecord('Leads', leadRecord?.id, {
+          Rail_Stage: '5',
+          Open_Package_Estimation: false,
+          Lead_Status: 'Deck Sent',
+        })
+        await fetchLeadRecord(leadRecord?.id)
+      }
+
+      onContinueToQualify()
+    } catch (error) {
+      console.error('Error continuing to qualify from W6:', error)
+      toast.error('Failed to update lead record. Please try again.')
+    } finally {
+      setIsCrmUpdating(false)
     }
   }
 
   return (
-    <section className="mx-auto w-full max-w-6xl px-4 py-8 md:px-8 md:py-12">
+    <>
+      <Loader
+        open={isCrmUpdating || isSavingAddons}
+        title={isCrmUpdating ? 'Updating Lead Record' : 'Saving Add-on Services'}
+        message="Please wait while we sync changes to Zoho CRM..."
+      />
+      <section className="mx-auto w-full max-w-6xl px-4 py-8 md:px-8 md:py-12">
       <div className="mb-7 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
@@ -169,7 +216,7 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
 
 
         <div className="space-y-4">
-          {!hasSessionContent ? (
+          {totalItems === 0 ? (
             <div className="rounded-xl border border-border p-2 text-sm text-muted-foreground">
               No session items found in CRM yet. Go back to add products and save the lead record.
             </div>
@@ -223,54 +270,43 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
                 </div>
               )}
 
-              {editableAddonServices.length > 0 && (
-                <div className="rounded-xl border border-border p-3 md:p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground">Add-on services</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Update prices before continuing to qualify
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {addonPricesDirty ? (
-                        <span className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-                          Unsaved prices
-                        </span>
-                      ) : null}
-                      <span className="text-sm text-muted-foreground">
-                        {editableAddonServices.length} service{editableAddonServices.length === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-3">
-                    <EditableAddonServicesList
-                      services={editableAddonServices}
-                      editable
-                      onPriceChange={updateAddonPrice}
-                      formatMoney={(value) => formatCurrency(value)}
-                    />
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-                    <p className="text-sm text-muted-foreground">
-                      Add-on subtotal{' '}
-                      <span className="font-semibold text-foreground">
-                        {formatCurrency(addonTotal)}
-                      </span>
-                    </p>
-                    <button
-                      type="button"
-                      onClick={saveAddonPrices}
-                      disabled={!addonPricesDirty || isSavingAddons}
-                      className="btn-secondary min-h-10 min-w-36 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isSavingAddons ? 'Saving…' : 'Save addon prices'}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
+        </div>
+
+        <div className="rounded-xl border border-border p-3 md:p-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">Add-on services</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Search, add, remove, and update prices — saved to CRM
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {addonServicesChanged ? (
+                <span className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  Unsaved changes
+                </span>
+              ) : null}
+              <button
+                type="button"
+                onClick={saveAddonServices}
+                disabled={!addonServicesChanged || isSavingAddons}
+                className="btn-secondary min-h-10 min-w-36 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSavingAddons ? 'Saving…' : 'Save add-on services'}
+              </button>
+            </div>
+          </div>
+
+          <AddOnServicesPicker
+            selectedServices={editableAddonServices}
+            onAddService={handleAddAddonService}
+            onRemoveService={handleRemoveAddonService}
+            editablePrices
+            onPriceChange={updateAddonPrice}
+            searchTitle="Add services to session"
+          />
         </div>
 
         {hasSessionContent && (
@@ -347,7 +383,7 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
           <button type="button" onClick={onAddAnotherItem} className="btn-secondary min-h-12 min-w-52">
             Add / Edit Item
           </button>
-          <button type="button" onClick={handleContinueToQualify} disabled={isSendingDeck || totalItems === 0 || !isDeckSent} className="btn-primary min-h-12 min-w-52 disabled:cursor-not-allowed disabled:opacity-60">
+          <button type="button" onClick={handleContinueToQualify} disabled={isSendingDeck || isCrmUpdating || totalItems === 0 || !isDeckSent} className="btn-primary min-h-12 min-w-52 disabled:cursor-not-allowed disabled:opacity-60">
             Continue to Qualify
           </button>
           <button type="button" onClick={onBack} className="btn-secondary min-h-12 min-w-52">
@@ -356,6 +392,7 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
         </div>
       </div>
     </section>
+    </>
   )
 }
 

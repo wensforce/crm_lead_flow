@@ -84,27 +84,16 @@ export function getCurrentUser() {
 
 // ---- Run a function ----
 export async function connectToCustomer(leadId) {
-  // return ZOHO.CRM.CONNECTION.invoke("zohocrm", {
-  //   url: `https://www.zohoapis.com/crm/v2/functions/call_via_exotel/actions/execute`,
-  //   method: "POST",
-  //   param_type: 2,
-  //   parameters: JSON.stringify({ arguments: JSON.stringify({ id: leadId, module: "Leads" }) })
-  // }).then((res) => {
-  //   console.log("Function Response:", res);
-  //   return res;
-  // });
+  const func_name = "call_via_exotel2"; // exact API name of your Deluge function
+  const req_data = {
+    arguments: JSON.stringify({
+      id: leadId,
+      module: "Leads",
+    }),
+  };
 
-  const res = await fetch(
-    `https://www.zohoapis.in/crm/v7/functions/call_via_exotel1/actions/execute`,
-     {
-      method: "POST",
-      headers: {
-        "Authorization": `Zoho-oauthtoken 1003.e00eb6bb4ce919c9aade5055e279a25f.3c090085393c5096174f71f77b77ce43`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ arguments: JSON.stringify({ id: leadId, module: "Leads" }) })
-    }
-  );
-  console.log("Function Response:", res);
-  return res;
+  return window.ZOHO.CRM.FUNCTIONS.execute(func_name, req_data).then((data) => {
+    return data;
+  });
+
 }

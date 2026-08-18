@@ -2,11 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { updateRecord } from "../../api/zohoCrm";
 import Loader from "../Loader";
-import AddOnServicesPicker from "./AddOnServicesPicker";
-import {
-  parseAddonServices,
-  serializeAddonServicesForCrm,
-} from "../../utils/addonServices";
 
 const PILLARS = [
   { id: "Protective Services", label: "Protective Services" },
@@ -121,8 +116,6 @@ const W3GuidedRequirement = ({
 
   const [formData, setFormData] = useState(defaultFormData);
   const [initialFormData, setInitialFormData] = useState(defaultFormData);
-  const [addonServices, setAddonServices] = useState([]);
-  const [initialAddonServices, setInitialAddonServices] = useState([]);
   const [validationError, setValidationError] = useState("");
   const [loading, setLoading] = useState(false);
   const handleChange = (e) => {
@@ -134,19 +127,8 @@ const W3GuidedRequirement = ({
   };
 
   const isDirty = useMemo(() => {
-    return (
-      JSON.stringify(formData) !== JSON.stringify(initialFormData) ||
-      JSON.stringify(addonServices) !== JSON.stringify(initialAddonServices)
-    );
-  }, [formData, initialFormData, addonServices, initialAddonServices]);
-
-  const handleAddAddonService = (service) => {
-    setAddonServices((prev) => [...prev, service]);
-  };
-
-  const handleRemoveAddonService = (serviceId) => {
-    setAddonServices((prev) => prev.filter((service) => service.id !== serviceId));
-  };
+    return JSON.stringify(formData) !== JSON.stringify(initialFormData);
+  }, [formData, initialFormData]);
 
   const normalizeFormData = (data) => {
     const normalized = { ...data };
@@ -277,11 +259,8 @@ const W3GuidedRequirement = ({
           defaultFormData.specialRequirement,
       };
       const normalizedData = normalizeFormData(loadedData);
-      const loadedAddonServices = parseAddonServices(leadRecord?.Addon_Service);
       setFormData(normalizedData);
       setInitialFormData(normalizedData);
-      setAddonServices(loadedAddonServices);
-      setInitialAddonServices(loadedAddonServices);
     }
   }, [leadRecord]);
 
@@ -393,12 +372,10 @@ const W3GuidedRequirement = ({
           No_of_Luxury_Car: formData.luxuryCars,
           Car_Booking_Type: formData.carBookingType,
           Special_Requirements: formData.specialRequirement,
-          Addon_Service: serializeAddonServicesForCrm(addonServices),
           Rail_Stage: "3",
           Lead_Status: "Service Discovered",
         });
         await fetchLeadRecord(leadRecord?.id);
-        setInitialAddonServices(addonServices);
       }
       setLoading(false);
       onContinue();
@@ -818,13 +795,6 @@ const W3GuidedRequirement = ({
               </div>
             </div>
           )}
-
-          <AddOnServicesPicker
-            selectedServices={addonServices}
-            onAddService={handleAddAddonService}
-            onRemoveService={handleRemoveAddonService}
-            searchTitle="Add-on services"
-          />
 
           <div className="space-y-2.5">
             <label

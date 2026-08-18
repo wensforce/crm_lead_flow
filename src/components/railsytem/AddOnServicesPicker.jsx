@@ -36,6 +36,8 @@ const AddOnServicesPicker = ({
   selectedServices = [],
   onAddService = () => {},
   onRemoveService = () => {},
+  editablePrices = false,
+  onPriceChange = () => {},
   searchTitle = "Add-on services",
   searchPlaceholder = "Search more services (e.g., butler, wheelchair, access)...",
 }) => {
@@ -178,9 +180,24 @@ const AddOnServicesPicker = ({
                     <p className="flex-1 text-sm font-medium text-foreground">
                       {service.name}
                     </p>
-                    <span className="text-sm font-semibold text-primary">
-                      {formatAddonPrice(service.price)}
-                    </span>
+                    {editablePrices ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">₹</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={service.price}
+                          onChange={(e) => onPriceChange(index, e.target.value)}
+                          className="ui-input h-10 w-28 text-sm font-semibold"
+                          aria-label={`Price for ${service.name}`}
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-sm font-semibold text-primary">
+                        {formatAddonPrice(service.price)}
+                      </span>
+                    )}
                   </div>
                   <button
                     type="button"
