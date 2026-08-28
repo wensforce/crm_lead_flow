@@ -23,6 +23,7 @@ import {
   serializeAddonServicesForCrm,
   serializeAdditionalServicesString,
 } from "../../utils/addonServices";
+import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
 const W2Part2PackageCustomize = ({
   selectedPackageId = "",
@@ -35,7 +36,7 @@ const W2Part2PackageCustomize = ({
   onBack = () => {},
 }) => {
   const [selectedPackage, setSelectedPackage] = useState({});
-  const { leadRecord, fetchLeadRecord } = useZohoCrm();
+  const { leadRecord, fetchLeadRecord, currentUser } = useZohoCrm();
   const [loading, setLoading] = useState(false);
   const [validationError, setValidationError] = useState("");
   const [templateSent, setTemplateSent] = useState(false);
@@ -116,8 +117,8 @@ const W2Part2PackageCustomize = ({
     if (leadRecord) {
       const leadPackageId =
         typeof leadRecord.Package_Id === "object"
-          ? (leadRecord.Package_Id?.id || leadRecord.Package_Id?.ID || "")
-          : (leadRecord.Package_Id || "");
+          ? leadRecord.Package_Id?.id || leadRecord.Package_Id?.ID || ""
+          : leadRecord.Package_Id || "";
 
       const saved = {
         armedBodyguards: leadRecord.Additional_Armed || 0,
@@ -171,14 +172,14 @@ const W2Part2PackageCustomize = ({
     if (!selectedPackageId || !selectedPackage) return;
     if (!leadRecord?.Mobile) return;
     try {
-
       setIsSendingTemplate(true);
       await sendPackageTemplate({
         from: import.meta.env.VITE_WHATSAPP_PHONE || "+917304607954",
         to: leadRecord.Mobile,
         packageData: selectedPackage,
         leadName: leadRecord?.Last_Name || "",
-        addOnServices: `
+        addOnServices:
+          `
          ${addedArmedBodyguards > 0 ? `• Additional Armed Bodyguards: ${addedArmedBodyguards} X ${ADDON_PRICES.armedBodyguard} = ${addedArmedBodyguards * ADDON_PRICES.armedBodyguard}` : ""}
          ${addedUnarmedBodyguards > 0 ? `• Additional Unarmed Bodyguards: ${addedUnarmedBodyguards} X ${ADDON_PRICES.unarmedBodyguard} = ${addedUnarmedBodyguards * ADDON_PRICES.unarmedBodyguard}` : ""} 
          ${addedLuxuryVehicles > 0 ? `• Additional Luxury Vehicles: ${addedLuxuryVehicles} X ${ADDON_PRICES.luxuryVehicle} = ${addedLuxuryVehicles * ADDON_PRICES.luxuryVehicle}` : ""} 
@@ -186,6 +187,26 @@ const W2Part2PackageCustomize = ({
          ${selectedServices.length > 0 ? `• Additional Services: ${selectedServices.map((s) => `${s.name}: ${s.price}`).join(", ")}` : ""}
         ` || "",
         templateName: "lead_rail_system_package_v3",
+      });
+      await updateRecord("Leads", leadRecord?.id, {
+        Customised_Package_Sent_Template: true,
+      });
+      await addAndUpdateLogs({
+        Name: leadRecord?.Last_Name || "Unknown",
+        Lead_ID: leadRecord?.id,
+        Mobile: leadRecord?.Mobile || "none",
+        RailLog_Owner: currentUser?.id || "Unknown",
+        Logs: [
+          {
+            Agent: currentUser?.id || "Unknown",
+            Rail_Stage: "2.5",
+            Action: "Customised Package Sent Template",
+            Timestamp: new Date().toISOString(),
+            Data_Details: JSON.stringify({
+              Customised_Package_Sent_Template: true,
+            }),
+          },
+        ],
       });
       setTemplateSent(true);
     } catch (err) {
@@ -209,18 +230,73 @@ const W2Part2PackageCustomize = ({
         return;
       }
       setLoading(true);
-      const res = await updateRecord("Leads", leadRecord?.id, {
+      await updateRecord("Leads", leadRecord?.id, {
         Package_Id: selectedPackageId,
         Additional_Armed: addedArmedBodyguards,
         Additional_Unarmed: addedUnarmedBodyguards,
         Additional_Luxury_Car: addedLuxuryVehicles,
         Additional_Standard_Car: addedStandardVehicles,
-        Additional_Services: serializeAdditionalServicesString(selectedServices),
+        Additional_Services:
+          serializeAdditionalServicesString(selectedServices),
         Addon_Service: serializeAddonServicesForCrm(selectedServices),
         Service_City: serviceCity.trim(),
         Rail_Stage: "2.5",
+        ...(leadRecord?.Shepherded_By === "" ||
+        leadRecord?.Shepherded_By === null ||
+        leadRecord?.Shepherded_By === undefined
+          ? { Shepherded_By: currentUser?.id || "Unknown" }
+          : {}),
       });
+      if (
+        leadRecord?.Shepherded_By === "" ||
+        leadRecord?.Shepherded_By === null ||
+        leadRecord?.Shepherded_By === undefined
+      ) {
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "2.5",
+              Action: "Shepherded By Added",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify({
+                Shepherded_By: currentUser?.id || "Unknown",
+              }),
+            },
+          ],
+        });
+      }
       await fetchLeadRecord(leadRecord?.id);
+      await addAndUpdateLogs({
+        Name: leadRecord?.Last_Name || "Unknown",
+        Lead_ID: leadRecord?.id,
+        Mobile: leadRecord?.Mobile || "none",
+        RailLog_Owner: currentUser?.id || "Unknown",
+        Logs: [
+          {
+            Agent: currentUser?.id || "Unknown",
+            Rail_Stage: "2.5",
+            Action: "Customised Package Sent Template Saved",
+            Timestamp: new Date().toISOString(),
+            Data_Details: JSON.stringify({
+              Package_Id: selectedPackageId,
+              Additional_Armed: addedArmedBodyguards,
+              Additional_Unarmed: addedUnarmedBodyguards,
+              Additional_Luxury_Car: addedLuxuryVehicles,
+              Additional_Standard_Car: addedStandardVehicles,
+              Additional_Services:
+                serializeAdditionalServicesString(selectedServices),
+              Addon_Service: serializeAddonServicesForCrm(selectedServices),
+              Service_City: serviceCity.trim(),
+              Rail_Stage: "2.5",
+            }),
+          },
+        ],
+      });
       setLoading(false);
       onContinue();
     } catch (err) {
@@ -449,7 +525,8 @@ const W2Part2PackageCustomize = ({
                       <p className="text-xs text-primary">
                         Cost:{" "}
                         {formatPrice(
-                          addedUnarmedBodyguards * ADDON_PRICES.unarmedBodyguard,
+                          addedUnarmedBodyguards *
+                            ADDON_PRICES.unarmedBodyguard,
                         )}
                       </p>
                     )}
@@ -594,7 +671,8 @@ const W2Part2PackageCustomize = ({
                       </span>
                       <span className="text-sm font-semibold text-foreground">
                         {formatPrice(
-                          addedUnarmedBodyguards * ADDON_PRICES.unarmedBodyguard,
+                          addedUnarmedBodyguards *
+                            ADDON_PRICES.unarmedBodyguard,
                         )}
                       </span>
                     </div>
@@ -691,17 +769,29 @@ const W2Part2PackageCustomize = ({
             </label>
             {!templateSent ? (
               <div className="rounded-xl border border-border bg-card px-4 py-3.5 md:px-5 flex items-center gap-3">
-                <Clock size={18} className="text-muted-foreground shrink-0" strokeWidth={2} />
+                <Clock
+                  size={18}
+                  className="text-muted-foreground shrink-0"
+                  strokeWidth={2}
+                />
                 <p className="text-sm text-muted-foreground">
-                  <span className="font-semibold text-foreground">Template pending</span>{" "}
+                  <span className="font-semibold text-foreground">
+                    Template pending
+                  </span>{" "}
                   — Send template to unlock continue
                 </p>
               </div>
             ) : (
               <div className="rounded-xl border border-border bg-card px-4 py-3.5 md:px-5 flex items-center gap-3">
-                <CheckCircle2 size={18} className="text-primary shrink-0" strokeWidth={2} />
+                <CheckCircle2
+                  size={18}
+                  className="text-primary shrink-0"
+                  strokeWidth={2}
+                />
                 <p className="text-sm text-muted-foreground">
-                  <span className="font-semibold text-primary">Template sent</span>{" "}
+                  <span className="font-semibold text-primary">
+                    Template sent
+                  </span>{" "}
                   — You can now proceed
                 </p>
               </div>

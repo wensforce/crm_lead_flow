@@ -8,9 +8,13 @@
  * @param {Array<string>} options.bodyPlaceholders - Array of placeholder values for message body
  * @param {Array<Object>} options.cards - Optional array of card objects with template data
  * @param {string} [options.headerImageUrl] - Optional image URL for the template header
+ * @param {string} [options.headerDocumentUrl] - Optional document URL for the template header
+ * @param {string} [options.headerDocumentFilename] - Optional filename shown on DOCUMENT headers
  * @param {Array<{type?: string, parameter: string}>} [options.buttons] - Optional URL buttons e.g. [{type:"URL", parameter:"https://..."}]
  * @returns {Promise<Object>} API response
  */
+const getDoubleTickAuth = () => import.meta.env.VITE_DOUBLE_TICK_API_KEY || "";
+
 export const sendTemplateMessage = async ({
   from = '917304607954',
   to,
@@ -19,6 +23,8 @@ export const sendTemplateMessage = async ({
   bodyPlaceholders = [],
   cards = [],
   headerImageUrl = null,
+  headerDocumentUrl = null,
+  headerDocumentFilename = null,
   buttons = [],
 }) => {
   if (!from || !to || !templateName) {
@@ -40,6 +46,14 @@ export const sendTemplateMessage = async ({
       templateData.header = {
         type: "IMAGE",
         mediaUrl: headerImageUrl,
+      };
+    } else if (headerDocumentUrl) {
+      templateData.header = {
+        type: "DOCUMENT",
+        mediaUrl: headerDocumentUrl,
+        ...(headerDocumentFilename
+          ? { filename: String(headerDocumentFilename).slice(0, 240) }
+          : {}),
       };
     }
 
@@ -78,7 +92,7 @@ export const sendTemplateMessage = async ({
     const response = await fetch(DOUBLE_TICK_API_URL, {
       method: "POST",
       headers: {
-        Authorization: import.meta.env.VITE_DOUBLE_TICK_API_KEY || "",
+        Authorization: getDoubleTickAuth(),
         accept: "application/json",
         "content-type": "application/json",
       },
@@ -305,6 +319,122 @@ export const sendProductPhotoTemplate = async ({
     bodyPlaceholders,
     headerImageUrl,
     buttons: [],
+  });
+};
+
+/**
+ * Send one permanent-deployment bodyguard preview photo.
+ * Placeholders are blank except the last image in a batch (custom message).
+ */
+export const sendPermanentBodyguardTemplate = async ({
+  from,
+  to,
+  imageUrl,
+  placeholder = "",
+  templateName = "rail_permanent_bodyguard",
+}) => {
+  if (!to) throw new Error("Recipient phone number not available");
+  if (!imageUrl) throw new Error("Image URL is required");
+
+  return sendTemplateMessage({
+    from,
+    to,
+    templateName,
+    language: "en",
+    bodyPlaceholders: [placeholder ?? ""],
+    headerImageUrl: imageUrl,
+    buttons: [],
+  });
+};
+
+/**
+ * Upload a file to DoubleTick cloud and return a public media URL.
+ * WhatsApp template DOCUMENT headers require a fetchable https URL.
+ */
+export const uploadDoubleTickMedia = async (file) => {
+  if (!file) throw new Error("File is required");
+
+  const formData = new FormData();
+  formData.append(
+    "file",
+    file,
+    file.name || "WENS_Permanent_Agreement.pdf",
+  );
+
+  const response = await fetch("https://public.doubletick.io/media/upload", {
+    method: "POST",
+    headers: {
+      Authorization: getDoubleTickAuth(),
+      accept: "application/json",
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try {
+      detail += ` - ${JSON.stringify(await response.json())}`;
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(`Failed to upload agreement document: ${detail}`);
+  }
+
+  const data = await response.json();
+  const mediaUrl = data?.mediaUrl;
+  if (!mediaUrl) {
+    throw new Error("Upload succeeded but no media URL was returned");
+  }
+  return mediaUrl;
+};
+
+/**
+ * Send permanent-deployment agreement with a payment CTA.
+ * Body placeholder is client name only. Payment lives on the URL button.
+ * Pass `file` (uploaded to DoubleTick) and/or a public `documentUrl`.
+ */
+export const sendAgreementTemplate = async ({
+  from,
+  to,
+  clientName = "Dear",
+  paymentLink = "",
+  documentUrl = null,
+  file = null,
+  templateName = "rail_permanent_agreement",
+}) => {
+  if (!to) throw new Error("Recipient phone number not available");
+
+  let resolvedDocumentUrl = documentUrl;
+  if (!resolvedDocumentUrl && file) {
+    resolvedDocumentUrl = await uploadDoubleTickMedia(file);
+  }
+  if (!resolvedDocumentUrl) {
+    throw new Error("Agreement document is required");
+  }
+
+  let buttonParameter = paymentLink;
+  try {
+    const url = new URL(paymentLink);
+    if (url.hostname.includes("subscription.wensforce.com")) {
+      buttonParameter = url.search.startsWith("?")
+        ? url.search.slice(1)
+        : url.searchParams.toString();
+    }
+  } catch {
+    buttonParameter = paymentLink;
+  }
+
+  return sendTemplateMessage({
+    from,
+    to,
+    templateName,
+    language: "en",
+    bodyPlaceholders: [clientName || "Dear"],
+    headerDocumentUrl: resolvedDocumentUrl,
+    headerDocumentFilename: file?.name || "WENS_Permanent_Agreement.pdf",
+    buttons: buttonParameter
+      ? [{ type: "URL", parameter: buttonParameter }]
+      : [],
   });
 };
 

@@ -14,7 +14,7 @@ const COMPANY = {
   phone: "+91 98765 43210",
   email: "sales@wensforce.com",
   website: "www.wensforce.com",
-  logoUrl: "",
+  logoUrl: `${import.meta.env.BASE_URL}brand/wens-logo.png`,
 };
 const NOTES =
   "This is a provisional estimation for sales reference. Final commercial terms may vary after confirmation.";
@@ -22,7 +22,7 @@ const VALIDITY_DAYS = 7;
 const PREPARED_BY = "Sales Desk";
 const SIGNATURE_LABEL = "Authorized Signatory";
 const STAMP_LABEL = "Company Stamp";
-const SIGNATURE_URL = "";
+const SIGNATURE_URL = `${import.meta.env.BASE_URL}brand/wens-signature.png`;
 const STAMP_URL = "";
 
 const DEFAULT_INPUT = {
@@ -246,6 +246,17 @@ const loadImage = (src) =>
     image.onerror = () => resolve(null);
     image.src = src;
   });
+
+const imageToPngDataUrl = (image) => {
+  if (!image) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx || !canvas.width || !canvas.height) return null;
+  ctx.drawImage(image, 0, 0);
+  return canvas.toDataURL("image/png");
+};
 
 const getImageFormat = (src = "") => {
   const normalized = String(src).toLowerCase();
@@ -618,4 +629,186 @@ export async function downloadEstimationPdf(
 export async function getEstimationPdfBlob(data = {}) {
   const doc = await generateEstimationPdf(data);
   return doc.output("blob");
+}
+
+const htmlToPlainText = (value = "") => {
+  if (!value) return "";
+  if (typeof document === "undefined") {
+    return String(value).replace(/<[^>]+>/g, " ").replace(/\s+\n/g, "\n").trim();
+  }
+  const container = document.createElement("div");
+  container.innerHTML = value;
+  return (container.innerText || container.textContent || "").trim();
+};
+
+/**
+ * Build a printable agreement PDF from edited HTML or plain text.
+ */
+export async function generateAgreementPdf({
+  title = "Permanent Deployment Agreement",
+  clientName = "",
+  bodyHtml = "",
+  bodyText = "",
+} = {}) {
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginX = 18;
+  const contentWidth = pageWidth - marginX * 2;
+  const today = new Date().toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  const [logoImage, signatureImage] = await Promise.all([
+    loadImage(COMPANY.logoUrl),
+    loadImage(SIGNATURE_URL),
+  ]);
+  const logoDataUrl = imageToPngDataUrl(logoImage);
+  const signatureDataUrl = imageToPngDataUrl(signatureImage);
+
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, pageWidth, 32, "F");
+
+  if (logoDataUrl) {
+    doc.addImage(logoDataUrl, "PNG", marginX, 5, 22, 22);
+  } else {
+    drawLogoPlaceholder(doc, marginX, 6, 18);
+  }
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text(COMPANY.name, marginX + 28, 14);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(203, 213, 225);
+  doc.text(COMPANY.tagline, marginX + 28, 20);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(255, 255, 255);
+  doc.text("AGREEMENT", pageWidth - marginX, 14, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(203, 213, 225);
+  doc.text(`Date: ${today}`, pageWidth - marginX, 20, { align: "right" });
+
+  let cursorY = 44;
+  doc.setFont("times", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42);
+  const titleLines = doc.splitTextToSize(title, contentWidth);
+  doc.text(titleLines, pageWidth / 2, cursorY, { align: "center" });
+  cursorY += titleLines.length * 7 + 4;
+
+  if (clientName) {
+    doc.setFont("times", "italic");
+    doc.setFontSize(10);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Prepared for: ${clientName}`, pageWidth / 2, cursorY, {
+      align: "center",
+    });
+    cursorY += 10;
+  }
+
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.4);
+  doc.line(marginX, cursorY, pageWidth - marginX, cursorY);
+  cursorY += 10;
+
+  const FOOTER_HEIGHT = 16;
+  const SIGNATURE_BLOCK_HEIGHT = 38;
+  const bottomLimit = pageHeight - FOOTER_HEIGHT - SIGNATURE_BLOCK_HEIGHT;
+
+  const text = bodyText || htmlToPlainText(bodyHtml);
+  doc.setFont("times", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(30, 41, 59);
+  const lines = doc.splitTextToSize(text || " ", contentWidth);
+
+  lines.forEach((line) => {
+    if (cursorY > bottomLimit) {
+      doc.addPage();
+      cursorY = 20;
+    }
+    doc.text(line, marginX, cursorY);
+    cursorY += 6;
+  });
+
+  const signatureWidth = 58;
+  const signatureHeight = 22;
+  let signatureY = Math.max(cursorY + 10, pageHeight - FOOTER_HEIGHT - SIGNATURE_BLOCK_HEIGHT);
+  if (signatureY + SIGNATURE_BLOCK_HEIGHT > pageHeight - FOOTER_HEIGHT) {
+    doc.addPage();
+    signatureY = pageHeight - FOOTER_HEIGHT - SIGNATURE_BLOCK_HEIGHT;
+  }
+  const signatureX = pageWidth - marginX - signatureWidth;
+
+  if (signatureDataUrl) {
+    doc.addImage(
+      signatureDataUrl,
+      "PNG",
+      signatureX,
+      signatureY,
+      signatureWidth,
+      signatureHeight,
+    );
+  } else {
+    drawSignatureBox(
+      doc,
+      signatureX,
+      signatureY,
+      signatureWidth,
+      signatureHeight + 10,
+      SIGNATURE_LABEL,
+    );
+  }
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text(SIGNATURE_LABEL, signatureX + signatureWidth / 2, signatureY + signatureHeight + 6, {
+    align: "center",
+  });
+  doc.setFont("helvetica", "bold");
+  doc.text(COMPANY.name, signatureX + signatureWidth / 2, signatureY + signatureHeight + 11, {
+    align: "center",
+  });
+
+  doc.setDrawColor(226, 232, 240);
+  doc.line(marginX, pageHeight - 14, pageWidth - marginX, pageHeight - 14);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(148, 163, 184);
+  doc.text(
+    `${COMPANY.name} • Permanent deployment agreement`,
+    pageWidth / 2,
+    pageHeight - 8,
+    { align: "center" },
+  );
+
+  return doc;
+}
+
+export async function getAgreementPdfFile({
+  title,
+  clientName,
+  bodyHtml,
+  bodyText,
+  fileName = "WENS_Permanent_Agreement.pdf",
+} = {}) {
+  const doc = await generateAgreementPdf({
+    title,
+    clientName,
+    bodyHtml,
+    bodyText,
+  });
+  const blob = doc.output("blob");
+  return new File([blob], fileName, { type: "application/pdf" });
 }

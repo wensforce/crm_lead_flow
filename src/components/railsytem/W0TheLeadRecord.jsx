@@ -3,13 +3,14 @@ import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { updateRecord } from "../../api/zohoCrm";
 import Loader from "../Loader";
 import { toast } from "sonner";
+import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
 const W0TheLeadRecord = ({
   onStartDiscovery = () => {},
   onResumeFollowUp = () => {},
   onExitDisposition = () => {},
 }) => {
-  const { leadRecord, leadId, isLoading, error, fetchLeadRecord } =
+  const { leadRecord, leadId, isLoading, error, fetchLeadRecord, currentUser } =
     useZohoCrm();
   const leadPhone = leadRecord?.Mobile || "+91 98xxx xxxxx";
   const leadSource = leadRecord?.Source_Channel || "Superfone push";
@@ -37,15 +38,41 @@ const W0TheLeadRecord = ({
     if (selectedLanguage !== preferredLanguage) {
       try {
         setLoading(true);
+        const log = await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadId,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Rail_Log_Id: leadRecord?.Rail_Log_Id || "",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "0",
+              Action: "Lead Discovered",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify({
+                Preferred_Language: selectedLanguage,
+                Lead_Status: "Contacted",
+              }),
+            },
+          ],
+        });
         await updateRecord("Leads", leadId, {
           Preferred_Language: selectedLanguage,
+          Rail_Log_Id: leadRecord?.Rail_Log_Id || log?.id || "",
           Lead_Status: "Contacted",
           Rail_Stage: "0",
         });
         await fetchLeadRecord(leadId);
+
         setLoading(false);
       } catch (err) {
-        alert(
+        console.error(err);
+        await updateRecord("Leads", leadId, {
+          Rail_Log_Id: "",
+        });
+        await fetchLeadRecord(leadId);
+        toast.error(
           "Failed to update preferred language in Zoho CRM. Please try again.",
         );
         setLoading(false);

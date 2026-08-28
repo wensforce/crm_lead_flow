@@ -4,6 +4,7 @@ import { useZohoCrm } from '../../context/ZohoCrmContext'
 import useSendDeckTemplate from '../../hooks/useSendDeckTemplate'
 import Loader from '../Loader'
 import { toast } from 'sonner'
+import addAndUpdateLogs from '../../utils/addAndUpdateLogs'
 
 const formatCurrency = (value) => {
   if (value == null || value === '') return '—'
@@ -17,7 +18,7 @@ const toInt = (value) => {
 }
 
 const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
-  const { leadRecord, fetchLeadRecord } = useZohoCrm()
+  const { leadRecord, fetchLeadRecord, currentUser } = useZohoCrm()
   const [selectedPackage, setSelectedPackage] = useState(null)
   const [loading, setLoading] = useState(false)
   useEffect(() => {
@@ -97,6 +98,11 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
     selectedPackage?.Title,
   ])
 
+
+  const hasCustomizePackage = useMemo(() => {
+    return additionalLuxuryCars || additionalStandardCars || additionalArmed || additionalUnarmed
+  })
+
   const carRows = useMemo(() => {
     const rows = []
 
@@ -148,9 +154,14 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
   const totalItems = bodyguardRows.length + carRows.length
 
   const { isSendingDeck, deckSent, sendDeck } = useSendDeckTemplate()
-  const isDeckSent = deckSent || Boolean(leadRecord?.Package_Deck_Sent)
+  const isDeckSent = deckSent || Boolean(leadRecord?.Customised_Package_Deck_Sent)
 
   const sendDeckTemplate = async () => {
+
+    const payload = hasCustomizePackage
+      ? { Customised_Package_Deck_Sent: true }
+      : { Package_Deck_Sent: true };
+
     sendDeck({
       leadRecord,
       bodyguardRows,
@@ -160,8 +171,23 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
     })
       .then(async () => {
         toast.success("Package deck sent successfully");
-        await updateRecord('Leads', leadRecord?.id, { Package_Deck_Sent: true })
+        await updateRecord('Leads', leadRecord?.id, payload)
         await fetchLeadRecord(leadRecord?.id)
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "5.5",
+              Action: `${hasCustomizePackage ? "Customised Package" : "Package"} Deck Sent`,
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify(payload),
+            },
+          ],
+        })
       })
       .catch((error) => {
         console.error('Error sending package deck template:', error)
@@ -169,22 +195,43 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
       })
   }
 
+
+
   const handleContinue = async () => {
     if (isSendingDeck || !isDeckSent) return
 
     setLoading(true)
     try {
       const needsStageUpdate =
-        String(leadRecord?.Rail_Stage) !== '6' ||
+        String(leadRecord?.Rail_Stage) !== '5.5' ||
         leadRecord?.Open_Package_Estimation !== true
 
       if (needsStageUpdate) {
         await updateRecord('Leads', leadRecord?.id, {
-          Rail_Stage: '6',
+          Rail_Stage: '5.5',
           Open_Package_Estimation: true,
           Lead_Status: 'Deck Sent',
         })
         await fetchLeadRecord(leadRecord?.id)
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "5.5",
+              Action: "Customised Package Deck Sent Saved",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify({
+                Rail_Stage: '5.5',
+                Open_Package_Estimation: true,
+                Lead_Status: 'Deck Sent',
+              }),
+            },
+          ],
+        })
       }
 
       onContinue()
@@ -201,145 +248,145 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
 
   return (
     <>
-    <Loader open={loading} />
-    <section className="mx-auto w-full max-w-6xl px-4 py-8 md:px-8 md:py-12">
-      <div className="mb-7 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            Rail CRM flow
-          </p>
-          <h1 className="mt-1.5 text-2xl font-semibold text-foreground md:text-3xl">
-            Package Session Deck
-          </h1>
+      <Loader open={loading} />
+      <section className="mx-auto w-full max-w-6xl px-4 py-8 md:px-8 md:py-12">
+        <div className="mb-7 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+              Rail CRM flow
+            </p>
+            <h1 className="mt-1.5 text-2xl font-semibold text-foreground md:text-3xl">
+              Package Session Deck
+            </h1>
+          </div>
+          <p className="text-sm text-muted-foreground md:pb-1">Rev B</p>
         </div>
-        <p className="text-sm text-muted-foreground md:pb-1">Rev B</p>
-      </div>
 
-      <div className="surface-card space-y-6 p-4 md:space-y-7 md:p-7">
-        <header className="rounded-2xl bg-primary px-4 py-4 text-primary-foreground md:px-6">
-          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-            <h2 className="text-lg font-semibold tracking-tight md:text-xl">KA - Package Session Deck</h2>
-            <span className="text-sm text-primary-foreground/75 md:text-base">
-              package mapping with custom additions - Rev B
-            </span>
-          </div>
-        </header>
-
-        {!hasPackageData ? (
-          <div className="rounded-xl border border-border p-3 text-sm text-muted-foreground">
-            No package selected yet. Please go back and select a package first.
-          </div>
-        ) : (
-          <>
-            <div className="rounded-xl border border-border bg-card p-4 md:p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">{selectedPackage?.Title || 'Selected Package'}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {selectedPackage?.Car_Type || 'Car N/A'} | {selectedPackage?.Car_Segment || 'Segment N/A'}
-                  </p>
-                </div>
-                <p className="text-base font-semibold text-foreground">Base price: {formatCurrency(selectedPackage?.Price)}</p>
-              </div>
-            </div>
-
-            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                ['Armed bodyguards', armedCount],
-                ['Unarmed bodyguards', unarmedCount],
-                ['Standard cars', standardCarCount],
-                ['Luxury cars', luxuryCarCount],
-              ].map(([label, value]) => (
-                <li key={label} className="rounded-xl border border-border bg-background px-4 py-4 text-sm font-semibold text-foreground shadow-sm md:px-5 md:py-5">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
-                  <p className="mt-2 text-2xl font-semibold leading-none">{value}</p>
-                </li>
-              ))}
-            </ul>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-xl border border-border p-3 md:p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="text-lg font-semibold text-foreground">Bodyguard session details</h3>
-                  <span className="text-sm text-muted-foreground">{bodyguardRows.length} item{bodyguardRows.length === 1 ? '' : 's'}</span>
-                </div>
-                {bodyguardRows.length === 0 ? (
-                  <p className="mt-3 text-sm text-muted-foreground">No bodyguard mapping found in package.</p>
-                ) : (
-                  <ul className="mt-3 space-y-3 text-sm text-muted-foreground">
-                    {bodyguardRows.map((row, index) => (
-                      <li key={`${row.source}-${row.Bodyguard_Category}-${index}`} className="rounded-2xl border border-border bg-background p-4 md:p-5">
-                        <p className="mb-2 text-base font-semibold text-foreground">{row.Bodyguard_Category}</p>
-                        <div className="grid grid-cols-1 gap-2 text-sm leading-tight text-muted-foreground">
-                          <div className="flex items-center gap-2"><span className="font-medium text-foreground">Type:</span><span>{row.Bodyguard_Type || '—'}</span></div>
-                          <div className="flex items-center gap-2"><span className="font-medium text-foreground">Source:</span><span>{row.source}</span></div>
-                          <div className="flex items-center gap-2"><span className="font-medium text-foreground">Package:</span><span>{row.Package_Type || '—'}</span></div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div className="rounded-xl border border-border p-3 md:p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="text-lg font-semibold text-foreground">Car session details</h3>
-                  <span className="text-sm text-muted-foreground">{carRows.length} item{carRows.length === 1 ? '' : 's'}</span>
-                </div>
-                {carRows.length === 0 ? (
-                  <p className="mt-3 text-sm text-muted-foreground">No car mapping found in package.</p>
-                ) : (
-                  <ul className="mt-3 space-y-3 text-sm text-muted-foreground">
-                    {carRows.map((row, index) => (
-                      <li key={`${row.source}-${row.Car_Type}-${index}`} className="rounded-2xl border border-border bg-background p-4 md:p-5">
-                        <p className="mb-2 text-base font-semibold text-foreground">{row.Car_Type || 'Car'}</p>
-                        <div className="grid grid-cols-1 gap-2 text-sm leading-tight text-muted-foreground">
-                          <div className="flex items-center gap-2"><span className="font-medium text-foreground">Label:</span><span>{row.Car_Label || '—'}</span></div>
-                          <div className="flex items-center gap-2"><span className="font-medium text-foreground">Source:</span><span>{row.source}</span></div>
-                          <div className="flex items-center gap-2"><span className="font-medium text-foreground">Package:</span><span>{row.Package_Type || '—'}</span></div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-4 md:p-5 text-sm text-muted-foreground">
-              <p className="font-semibold text-foreground">Package vs additional mapping</p>
-              <p className="mt-1">Base: {baseArmed} armed, {baseUnarmed} unarmed, {totalBaseCars} car.</p>
-              <p className="mt-1">Additional: {additionalArmed} armed, {additionalUnarmed} unarmed, {additionalLuxuryCars} luxury car, {additionalStandardCars} standard car.</p>
-            </div>
-          </>
-        )}
-
-        <div className="flex flex-wrap items-center gap-3 pt-2">
-          <button
-            type="button"
-            onClick={sendDeckTemplate}
-            disabled={isSendingDeck || totalItems === 0 || !leadRecord?.Mobile || !hasPackageData}
-            className="min-h-12 min-w-52 rounded-md border border-emerald-700/75 bg-emerald-50 px-4 py-2.5 font-semibold text-emerald-900 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSendingDeck ? (
-              <span className="inline-flex items-center gap-2">
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Sending…
+        <div className="surface-card space-y-6 p-4 md:space-y-7 md:p-7">
+          <header className="rounded-2xl bg-primary px-4 py-4 text-primary-foreground md:px-6">
+            <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+              <h2 className="text-lg font-semibold tracking-tight md:text-xl">KA - Package Session Deck</h2>
+              <span className="text-sm text-primary-foreground/75 md:text-base">
+                package mapping with custom additions - Rev B
               </span>
-            ) : isDeckSent ? (
-              'Send Again'
-            ) : (
-              'Send package deck'
-            )}
-          </button>
-          <button type="button" onClick={onBack} className="btn-secondary min-h-12 min-w-52">
-            Add / Edit Package
-          </button>
-          <button type="button" onClick={handleContinue} disabled={isSendingDeck || totalItems === 0 || !isDeckSent} className="btn-primary min-h-12 min-w-52 disabled:cursor-not-allowed disabled:opacity-60">
-            Continue to Requirement
-          </button>
+            </div>
+          </header>
+
+          {!hasPackageData ? (
+            <div className="rounded-xl border border-border p-3 text-sm text-muted-foreground">
+              No package selected yet. Please go back and select a package first.
+            </div>
+          ) : (
+            <>
+              <div className="rounded-xl border border-border bg-card p-4 md:p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground">{selectedPackage?.Title || 'Selected Package'}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {selectedPackage?.Car_Type || 'Car N/A'} | {selectedPackage?.Car_Segment || 'Segment N/A'}
+                    </p>
+                  </div>
+                  <p className="text-base font-semibold text-foreground">Base price: {formatCurrency(selectedPackage?.Price)}</p>
+                </div>
+              </div>
+
+              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  ['Armed bodyguards', armedCount],
+                  ['Unarmed bodyguards', unarmedCount],
+                  ['Standard cars', standardCarCount],
+                  ['Luxury cars', luxuryCarCount],
+                ].map(([label, value]) => (
+                  <li key={label} className="rounded-xl border border-border bg-background px-4 py-4 text-sm font-semibold text-foreground shadow-sm md:px-5 md:py-5">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
+                    <p className="mt-2 text-2xl font-semibold leading-none">{value}</p>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl border border-border p-3 md:p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 className="text-lg font-semibold text-foreground">Bodyguard session details</h3>
+                    <span className="text-sm text-muted-foreground">{bodyguardRows.length} item{bodyguardRows.length === 1 ? '' : 's'}</span>
+                  </div>
+                  {bodyguardRows.length === 0 ? (
+                    <p className="mt-3 text-sm text-muted-foreground">No bodyguard mapping found in package.</p>
+                  ) : (
+                    <ul className="mt-3 space-y-3 text-sm text-muted-foreground">
+                      {bodyguardRows.map((row, index) => (
+                        <li key={`${row.source}-${row.Bodyguard_Category}-${index}`} className="rounded-2xl border border-border bg-background p-4 md:p-5">
+                          <p className="mb-2 text-base font-semibold text-foreground">{row.Bodyguard_Category}</p>
+                          <div className="grid grid-cols-1 gap-2 text-sm leading-tight text-muted-foreground">
+                            <div className="flex items-center gap-2"><span className="font-medium text-foreground">Type:</span><span>{row.Bodyguard_Type || '—'}</span></div>
+                            <div className="flex items-center gap-2"><span className="font-medium text-foreground">Source:</span><span>{row.source}</span></div>
+                            <div className="flex items-center gap-2"><span className="font-medium text-foreground">Package:</span><span>{row.Package_Type || '—'}</span></div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-border p-3 md:p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 className="text-lg font-semibold text-foreground">Car session details</h3>
+                    <span className="text-sm text-muted-foreground">{carRows.length} item{carRows.length === 1 ? '' : 's'}</span>
+                  </div>
+                  {carRows.length === 0 ? (
+                    <p className="mt-3 text-sm text-muted-foreground">No car mapping found in package.</p>
+                  ) : (
+                    <ul className="mt-3 space-y-3 text-sm text-muted-foreground">
+                      {carRows.map((row, index) => (
+                        <li key={`${row.source}-${row.Car_Type}-${index}`} className="rounded-2xl border border-border bg-background p-4 md:p-5">
+                          <p className="mb-2 text-base font-semibold text-foreground">{row.Car_Type || 'Car'}</p>
+                          <div className="grid grid-cols-1 gap-2 text-sm leading-tight text-muted-foreground">
+                            <div className="flex items-center gap-2"><span className="font-medium text-foreground">Label:</span><span>{row.Car_Label || '—'}</span></div>
+                            <div className="flex items-center gap-2"><span className="font-medium text-foreground">Source:</span><span>{row.source}</span></div>
+                            <div className="flex items-center gap-2"><span className="font-medium text-foreground">Package:</span><span>{row.Package_Type || '—'}</span></div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-card p-4 md:p-5 text-sm text-muted-foreground">
+                <p className="font-semibold text-foreground">Package vs additional mapping</p>
+                <p className="mt-1">Base: {baseArmed} armed, {baseUnarmed} unarmed, {totalBaseCars} car.</p>
+                <p className="mt-1">Additional: {additionalArmed} armed, {additionalUnarmed} unarmed, {additionalLuxuryCars} luxury car, {additionalStandardCars} standard car.</p>
+              </div>
+            </>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={sendDeckTemplate}
+              disabled={isSendingDeck || totalItems === 0 || !leadRecord?.Mobile || !hasPackageData}
+              className="min-h-12 min-w-52 rounded-md border border-emerald-700/75 bg-emerald-50 px-4 py-2.5 font-semibold text-emerald-900 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSendingDeck ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Sending…
+                </span>
+              ) : isDeckSent ? (
+                'Send Again'
+              ) : (
+                'Send package deck'
+              )}
+            </button>
+            <button type="button" onClick={onBack} className="btn-secondary min-h-12 min-w-52">
+              Add / Edit Package
+            </button>
+            <button type="button" onClick={handleContinue} disabled={isSendingDeck || totalItems === 0 || !isDeckSent} className="btn-primary min-h-12 min-w-52 disabled:cursor-not-allowed disabled:opacity-60">
+              Continue to Requirement
+            </button>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
     </>
   )
 }

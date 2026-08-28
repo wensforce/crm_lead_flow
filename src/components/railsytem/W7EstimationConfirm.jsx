@@ -33,6 +33,7 @@ import {
   serializeAdditionalServicesString,
 } from "../../utils/addonServices";
 import EditableAddonServicesList from "./EditableAddonServicesList";
+import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
 const toInt = (value) => {
   const number = Number(value);
@@ -610,6 +611,7 @@ const EstimationConfirm = ({
 
       let payload = {
         Is_Estimation_Approved: true,
+        Estimation_Sent: true,
         Approval_Status: "Accepted",
         Rail_Stage: "7",
         Lead_Status: "Manager Approved Estimate",
@@ -645,7 +647,6 @@ const EstimationConfirm = ({
       } else {
         payload = {
           ...payload,
-          Estimation_Sent: true,
           Estimation_Range_Start: startPrice,
           Estimation_Range_End: endingPrice,
           Estimation_Percentage: Number(packageMargin) || 0,
@@ -654,6 +655,21 @@ const EstimationConfirm = ({
 
       await updateRecord("Leads", leadRecord?.id, payload);
       await fetchLeadRecord(leadRecord?.id);
+      await addAndUpdateLogs({
+        Name: leadRecord?.Last_Name || "Unknown",
+        Lead_ID: leadRecord?.id,
+        Mobile: leadRecord?.Mobile || "none",
+        RailLog_Owner: currentUser?.id || "Unknown",
+        Logs: [
+          {
+            Agent: currentUser?.id || "Unknown",
+            Rail_Stage: "7",
+            Action: "Approved Saved",
+            Timestamp: new Date().toISOString(),
+            Data_Details: JSON.stringify(payload),
+          },
+        ],
+      });
       setIsEditingMargins(false);
       setInitialPackageMargin(packageMargin);
       setInitialAddonServices(cloneAddonServices(editableAddonServices));
@@ -697,6 +713,24 @@ const EstimationConfirm = ({
     try {
       await updateRecord("Leads", leadRecord.id, {
         Estimate_Deadline_At: nextDeadlineValue,
+      });
+      await addAndUpdateLogs({
+        Name: leadRecord?.Last_Name || "Unknown",
+        Lead_ID: leadRecord?.id,
+        Mobile: leadRecord?.Mobile || "none",
+        RailLog_Owner: currentUser?.id || "Unknown",
+        Logs: [
+          {
+            Agent: currentUser?.id || "Unknown",
+            Rail_Stage: "7",
+            Action: "Estimate Deadline Delayed",
+            Timestamp: new Date().toISOString(),
+            Data_Details: JSON.stringify({
+              Delayed_By: minutes,
+              Estimate_Deadline_At: nextDeadlineValue,
+            }),
+          },
+        ],
       });
 
       setDeadlineAtMs(nextDeadlineMs);

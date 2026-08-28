@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { updateRecord } from "../../api/zohoCrm";
+import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
 const LEAD_STATUS_OPTIONS = ["Junk", "Lost", "Nurturing", "Unreachable", "Job", "Marketing", "Vendor", "Follow Up Action"];
 
 const NotASalesCall = ({ onBack = () => {} }) => {
-  const { leadRecord, leadId, fetchLeadRecord } = useZohoCrm();
+  const { leadRecord, leadId, fetchLeadRecord, currentUser } = useZohoCrm();
 
   const [leadStatus, setLeadStatus] = useState("");
   const [closingRemark, setClosingRemark] = useState("");
@@ -61,6 +62,25 @@ const NotASalesCall = ({ onBack = () => {} }) => {
         Rail_Stage: "12",
       });
       await fetchLeadRecord(recordId);
+      await addAndUpdateLogs({
+        Name: leadRecord?.Last_Name || "Unknown",
+        Lead_ID: recordId,
+        Mobile: leadRecord?.Mobile || "none",
+        RailLog_Owner: currentUser?.id || "Unknown",
+        Logs: [
+          {
+            Agent: currentUser?.id || "Unknown",
+            Rail_Stage: "12",
+            Action: "Lead Closed",
+            Timestamp: new Date().toISOString(),
+            Data_Details: JSON.stringify({
+              Lead_Status: leadStatus,
+              Closing_Remark: closingRemark,
+              Rail_Stage: "12",
+            }),
+          },
+        ],
+      });
       setInitialLeadStatus(leadStatus);
       setInitialClosingRemark(closingRemark);
       setIsClosed(true);

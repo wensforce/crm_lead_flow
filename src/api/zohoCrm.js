@@ -8,6 +8,13 @@ function unwrap(res) {
   return res.data; // array — could be 1 record, multiple, or 1 action result
 }
 
+// ---- GET field metadata (META, not API) ----
+export function getFields(entity) {
+  return window.ZOHO.CRM.META.getFields({ Entity: entity }).then(
+    (res) => res?.fields || [],
+  );
+}
+
 // ---- GET a single record ----
 export function getRecord(entity, recordId) {
   return window.ZOHO.CRM.API.getRecord({ Entity: entity, RecordID: recordId })
@@ -59,6 +66,16 @@ export function deleteRecord(entity, recordId) {
   })
     .then(unwrap)
     .then((data) => data[0]);
+}
+
+// ---- ATTACH a file to a record ----
+export function attachFile(entity, recordId, file, fileName) {
+  const resolvedName = fileName || file?.name || "agreement.pdf";
+  return window.ZOHO.CRM.API.attachFile({
+    Entity: entity,
+    RecordID: recordId,
+    File: { Name: resolvedName, Content: file },
+  }).then(unwrap);
 }
 
 // ---- SEARCH records (e.g. find by phone/email before inserting, avoid duplicates) ----

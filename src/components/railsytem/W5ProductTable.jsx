@@ -11,6 +11,7 @@ import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { connectToCustomer, searchRecord, updateRecord } from "../../api/zohoCrm";
 import { sendProductPhotoTemplate } from "../../api/sendTemplate";
 import { toast } from "sonner";
+import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
 const ARMED_TYPES = [
   "Civilian",
@@ -696,6 +697,23 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
         { Product_Sent_Template: updatedTemplateValue },
         ["workflow"],
       );
+      await addAndUpdateLogs({
+        Name: leadRecord?.Last_Name || "Unknown",
+        Lead_ID: leadRecord?.id,
+        Mobile: leadRecord?.Mobile || "none",
+        RailLog_Owner: currentUser?.id || "Unknown",
+        Logs: [
+          {
+            Agent: currentUser?.id || "Unknown",
+            Rail_Stage: "4",
+            Action: `Product Photo Sent ${item.productCode}`,
+            Timestamp: new Date().toISOString(),
+            Data_Details: JSON.stringify({
+              Product_Sent_Template: updatedTemplateValue,
+            }),
+          },
+        ],
+      });
       toast.success("Photo sent successfully");
       // update local state
       setSentProductIds(newSentCodes);
@@ -792,12 +810,33 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
         Bodyguard_Requirements: bgRows,
         Car_Requirements: carRows,
         Rail_Stage: "4",
-        Catalog_Sent: false,
+        Guided_Catalog_Sent: false,
         Lead_Status: "Guided Catalogue Sent",
       },
       ["workflow"],
     );
     await fetchLeadRecord(leadRecord.id);
+    await addAndUpdateLogs({
+      Name: leadRecord?.Last_Name || "Unknown",
+      Lead_ID: leadRecord?.id,
+      Mobile: leadRecord?.Mobile || "none",
+      RailLog_Owner: currentUser?.id || "Unknown",
+      Logs: [
+        {
+          Agent: currentUser?.id || "Unknown",
+          Rail_Stage: "4",
+          Action: "Guided Catalogue Sent Saved",
+          Timestamp: new Date().toISOString(),
+          Data_Details: JSON.stringify({
+            Bodyguard_Requirements: bgRows,
+            Car_Requirements: carRows,
+            Rail_Stage: "4",
+            Guided_Catalog_Sent: false,
+            Lead_Status: "Guided Catalogue Sent",
+          }),
+        },
+      ],
+    });
   };
 
   const removeItem = (id) => {

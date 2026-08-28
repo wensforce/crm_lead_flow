@@ -13,6 +13,7 @@ import {
   parseAdditionalServicesString,
   parseAddonServices,
 } from '../../utils/addonServices'
+import addAndUpdateLogs from '../../utils/addAndUpdateLogs'
 
 const DECISION_MAKER_OPTIONS = [
   'Party',
@@ -154,11 +155,10 @@ const W4Qualify = ({
     if (isOpenPackageEstimation) {
       return toBooleanFlag(leadRecord?.Package_Estimation_Send)
     }
-    return toBooleanFlag(leadRecord?.Estimation_Sent || leadRecord?.Estimation_Approval_Send)
+    return toBooleanFlag(leadRecord?.Estimation_Approval_Send)
   }, [
     isOpenPackageEstimation,
     leadRecord?.Package_Estimation_Send,
-    leadRecord?.Estimation_Sent,
     leadRecord?.Estimation_Approval_Send,
   ])
 
@@ -282,6 +282,21 @@ const W4Qualify = ({
       try {
         await updateRecord('Leads', leadRecord?.id, payload)
         await fetchLeadRecord(leadRecord?.id)
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "12",
+              Action: "No Decision Maker",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify(payload),
+            },
+          ],
+        })
         onDecisionMakerModalContinue()
         toast.success('Lead updated successfully!')
       } catch (error) {
@@ -322,7 +337,6 @@ const W4Qualify = ({
       Customer_confirmed_deck: JSON.stringify(isCatalogConfirmedOnCall),
       Estimate_Deadline_At: formatZohoDateTime(new Date(Date.now() + 15 * 60 * 1000)),
       Estimation_Approval_Send: currentUser?.role?.name?.trim()?.toLowerCase() === 'sales executive' ? true : false,
-      Estimation_Sent: true, 
       Estimate_DeadlineAt: currentUser?.role?.name?.trim()?.toLowerCase() === 'sales executive' ? formatZohoDateTime(new Date(Date.now() + 15 * 60 * 1000)) : '',
       Estimation_Sent_At: formatZohoDateTime(new Date()),
       Estimation_Range_Start: pricingSummary.startPrice,
@@ -330,7 +344,7 @@ const W4Qualify = ({
       Estimation_Percentage: crmBookingPercentage,
       Approval_Manager_Estimation: currentUser.id,
       ApprovalStatus: 'Pending',
-      Rail_Stage: '7',
+      Rail_Stage: '6',
       Lead_Status: "Agent Sent Estimate",
     }
 
@@ -435,6 +449,21 @@ const W4Qualify = ({
           ...payload,
         })
         await fetchLeadRecord(leadRecord?.id)
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "6",
+              Action: "Estimation Sent Saved",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify(payload),
+            },
+          ],
+        })
       }
 
       setIsConfirmModalOpen(false)

@@ -2,12 +2,19 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { updateRecord } from "../../api/zohoCrm";
 import Loader from "../Loader";
+import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
 const PILLARS = [
   { id: "Protective Services", label: "Protective Services" },
   { id: "Lifestyle & Hospitality", label: "Lifestyle & Hospitality" },
-  { id: "Legal, Risk & Dispute Advisory", label: "Legal, Risk & Dispute Advisory" },
-  { id: "Bespoke Protection, Lifestyle & Risk Management", label: "Bespoke Protection, Lifestyle & Risk Management" },
+  {
+    id: "Legal, Risk & Dispute Advisory",
+    label: "Legal, Risk & Dispute Advisory",
+  },
+  {
+    id: "Bespoke Protection, Lifestyle & Risk Management",
+    label: "Bespoke Protection, Lifestyle & Risk Management",
+  },
 ];
 
 const SERVICE_LINES = {
@@ -61,7 +68,8 @@ const resolveCoverageType = (servicePillar, serviceLine) => {
       : COVERAGE.bodyguard;
   }
   if (servicePillar === "Lifestyle & Hospitality") return COVERAGE.car;
-  if (servicePillar === "Legal, Risk & Dispute Advisory") return COVERAGE.bodyguard;
+  if (servicePillar === "Legal, Risk & Dispute Advisory")
+    return COVERAGE.bodyguard;
   return COVERAGE.both;
 };
 
@@ -89,10 +97,11 @@ const fromDateTimeLocalValue = (value) => {
 
 const W3GuidedRequirement = ({
   onContinue = () => {},
+  onPermanentContinue = () => {},
   onNotSalesCall = () => {},
   onBack = () => {},
 }) => {
-  const { leadRecord, fetchLeadRecord } = useZohoCrm();
+  const { leadRecord, fetchLeadRecord, currentUser } = useZohoCrm();
 
   const defaultFormData = {
     servicePillar: PILLARS[0].id,
@@ -239,12 +248,15 @@ const W3GuidedRequirement = ({
     if (leadRecord) {
       const loadedData = {
         servicePillar: leadRecord?.Service_Pillar || PILLARS[0].id,
-        serviceLine: leadRecord?.Service_Line || SERVICE_LINES["Protective Services"][0],
+        serviceLine:
+          leadRecord?.Service_Line || SERVICE_LINES["Protective Services"][0],
         motion: leadRecord?.Motion || "None",
         deploymentType: leadRecord?.Deployment_Type || "None",
         city: leadRecord?.Service_City || "",
         site: leadRecord?.Site_Coverage_Location_s || "",
-        startDate: toDateTimeLocalValue(leadRecord?.Service_Start_Date_And_Time),
+        startDate: toDateTimeLocalValue(
+          leadRecord?.Service_Start_Date_And_Time,
+        ),
         endDate: toDateTimeLocalValue(leadRecord?.Service_End_Date_And_Time),
         bodyguardType: leadRecord?.Armed_Unarmed || "None",
         armedCount: leadRecord?.No_of_Armed_Personnel || "",
@@ -351,6 +363,8 @@ const W3GuidedRequirement = ({
     }
     setValidationError("");
 
+    const isPermanent = formData.deploymentType === "Permanent";
+
     try {
       if (isDirty) {
         setLoading(true);
@@ -361,7 +375,9 @@ const W3GuidedRequirement = ({
           Deployment_Type: formData.deploymentType,
           Service_City: formData.city,
           Site_Coverage_Location_s: formData.site,
-          Service_Start_Date_And_Time: fromDateTimeLocalValue(formData.startDate),
+          Service_Start_Date_And_Time: fromDateTimeLocalValue(
+            formData.startDate,
+          ),
           Service_End_Date_And_Time: fromDateTimeLocalValue(formData.endDate),
           Armed_Unarmed: formData.bodyguardType,
           No_of_Armed_Personnel: formData.armedCount,
@@ -374,11 +390,83 @@ const W3GuidedRequirement = ({
           Special_Requirements: formData.specialRequirement,
           Rail_Stage: "3",
           Lead_Status: "Service Discovered",
+          ...(leadRecord?.Shepherded_By === "" ||
+          leadRecord?.Shepherded_By === null ||
+          leadRecord?.Shepherded_By === undefined
+            ? { Shepherded_By: currentUser?.id || "Unknown" }
+            : {}),
         });
+ 
         await fetchLeadRecord(leadRecord?.id);
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "3",
+              Action: "Guided Service Discovered",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify({
+                Service_Pillar: formData.servicePillar,
+                Service_Line: formData.serviceLine,
+                Motion: formData.motion,
+                Deployment_Type: formData.deploymentType,
+                Service_City: formData.city,
+                Site_Coverage_Location_s: formData.site,
+                Service_Start_Date_And_Time: fromDateTimeLocalValue(
+                  formData.startDate,
+                ),
+                Service_End_Date_And_Time: fromDateTimeLocalValue(
+                  formData.endDate,
+                ),
+                Armed_Unarmed: formData.bodyguardType,
+                No_of_Armed_Personnel: formData.armedCount,
+                No_of_UnArmed_Personnel: formData.unarmedCount,
+                Shift_Pattern: formData.shiftPattern,
+                Car_Segement: formData.Car_Segement,
+                No_of_Standard_Car: formData.standardCars,
+                No_of_Luxury_Car: formData.luxuryCars,
+                Car_Booking_Type: formData.carBookingType,
+                Special_Requirements: formData.specialRequirement,
+                Rail_Stage: "3",
+                Lead_Status: "Service Discovered",
+              }),
+            },
+          ],
+        });
+        if (
+          leadRecord?.Shepherded_By === "" ||
+          leadRecord?.Shepherded_By === null ||
+          leadRecord?.Shepherded_By === undefined
+        ) {
+          await addAndUpdateLogs({
+            Name: leadRecord?.Last_Name || "Unknown",
+            Lead_ID: leadRecord?.id,
+            Mobile: leadRecord?.Mobile || "none",
+            RailLog_Owner: currentUser?.id || "Unknown",
+            Logs: [
+              {
+                Agent: currentUser?.id || "Unknown",
+                Rail_Stage: "3",
+                Action: "Shepherded By Added",
+                Timestamp: new Date().toISOString(),
+                Data_Details: JSON.stringify({
+                  Shepherded_By: currentUser?.id || "Unknown",
+                }),
+              },
+            ],
+          });
+        }
       }
       setLoading(false);
-      onContinue();
+      if (isPermanent) {
+        onPermanentContinue();
+      } else {
+        onContinue();
+      }
     } catch (error) {
       console.error("Failed to update record:", error);
       setLoading(false);
@@ -504,6 +592,7 @@ const W3GuidedRequirement = ({
                 <option value="Short-term">Short-term</option>
                 <option value="Long-term-Retainer">Long-term Retainer</option>
                 <option value="Event">Event</option>
+                <option value="Permanent">Permanent</option>
               </select>
             </div>
 
@@ -580,7 +669,7 @@ const W3GuidedRequirement = ({
                 className="ui-input h-12 text-sm"
               />
             </div>
-          </div> 
+          </div>
 
           <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground md:px-5">
             Coverage by current selection:{" "}
@@ -639,7 +728,9 @@ const W3GuidedRequirement = ({
                       <option value="None" disabled>
                         None
                       </option>
-    
+                      <option value="airport-transfer">
+                        Airport Transfer (4hr/40km)
+                      </option>
                       <option value="8 Hours">8 Hours</option>
                       <option value="12 Hours">12 Hours</option>
                       <option value="24 x 7">24 x 7</option>
@@ -743,6 +834,10 @@ const W3GuidedRequirement = ({
                     <option value="None" disabled>
                       None
                     </option>
+                    <option value="airport-transfer">
+                      {" "}
+                      Airport Transfer ( 4hr/40km ){" "}
+                    </option>
                     <option value="80 Km / 8 Hours">80 Km / 8 Hours</option>
                     <option value="120 Km / 12 Hours">120 Km / 12 Hours</option>
                     <option value="300 Km / 24 Hours">300 Km / 24 Hours</option>
@@ -834,7 +929,9 @@ const W3GuidedRequirement = ({
               onClick={handleContinue}
               className="btn-primary min-h-12 min-w-52"
             >
-              Continue - Product Table
+              {formData.deploymentType === "Permanent"
+                ? "Continue"
+                : "Continue - Product Table"}
             </button>
             <button
               type="button"

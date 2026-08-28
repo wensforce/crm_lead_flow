@@ -22,6 +22,7 @@ import sendTemplateMessage, {
 } from "../../api/sendTemplate";
 import Loader from "../Loader";
 import { toast } from "sonner";
+import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
 const W2PackageCard = ({
   onCatalogueConfirm = () => {},
@@ -30,7 +31,7 @@ const W2PackageCard = ({
   onSendTemplate = () => {},
   onSelectPackageForCustomization = () => {},
 }) => {
-  const { leadRecord, fetchLeadRecord } = useZohoCrm();
+  const { leadRecord, fetchLeadRecord, currentUser } = useZohoCrm();
   const [packagesData, setPackagesData] = useState([]);
   const [selectedPackageId, setSelectedPackageId] = useState("");
   const [isTemplateSent, setIsTemplateSent] = useState(false);
@@ -65,7 +66,6 @@ const W2PackageCard = ({
     return iconMap[iconName] || null;
   };
 
-
   useEffect(() => {
     getAllRecords("Package", { per_page: 20 }).then((data) => {
       const formattedPrivileges = data.map((pkg) => {
@@ -74,7 +74,6 @@ const W2PackageCard = ({
           privileges: pkg.Privileges?.split(",") || [],
         };
       });
-      console.log("Formatted packages data with privileges:", formattedPrivileges);
       setPackagesData(formattedPrivileges);
     });
   }, []);
@@ -113,6 +112,29 @@ const W2PackageCard = ({
       setTemplateStatusMessage(
         `msg-id ${response?.id || Date.now().toString().slice(-4)}`,
       );
+      await updateRecord("Leads", leadRecord?.id, {
+        Package_Template_Sent: true,
+      });
+      await addAndUpdateLogs({
+        Name: leadRecord?.Last_Name || "Unknown",
+        Lead_ID: leadRecord?.id,
+        Mobile: leadRecord?.Mobile || "none",
+        RailLog_Owner: currentUser?.id || "Unknown",
+        Logs: [
+          {
+            Agent: currentUser?.id || "Unknown",
+            Rail_Stage: "2",
+            Action: "Package Template Sent",
+            Timestamp: new Date().toISOString(),
+            Data_Details: JSON.stringify({
+              Package_Id: selectedPackageId,
+              Package_Template_Sent: true,
+              Package_Name: selectedPackage?.Title || "",
+              Package_Template: "lead_rail_system_package_v3",
+            }),
+          },
+        ],
+      });
       toast.success("Template sent successfully");
       onSendTemplate();
     } catch (error) {
@@ -143,13 +165,60 @@ const W2PackageCard = ({
         Object.assign(payload, {
           Rail_Stage: "2",
           Package_Id: selectedPackageId,
-          Package_Template_Sent: true,
           Package_Name: selectedPackage?.Title || "",
           Lead_Status: "Catalogue Sent",
         });
       }
+      if (
+        leadRecord?.Shepherded_By === "" ||
+        leadRecord?.Shepherded_By === null ||
+        leadRecord?.Shepherded_By === undefined
+      ) {
+        Object.assign(payload, {
+          Shepherded_By: currentUser?.id || "Unknown",
+        });
+      }
       await updateRecord("Leads", leadRecord?.id, payload);
       await fetchLeadRecord(leadRecord?.id);
+      await addAndUpdateLogs({
+        Name: leadRecord?.Last_Name || "Unknown",
+        Lead_ID: leadRecord?.id,
+        Mobile: leadRecord?.Mobile || "none",
+        RailLog_Owner: currentUser?.id || "Unknown",
+        Logs: [
+          {
+            Agent: currentUser?.id || "Unknown",
+            Rail_Stage: "2",
+            Action: "Package Template Sent Saved",
+            Timestamp: new Date().toISOString(),
+            Data_Details: JSON.stringify(payload),
+          },
+        ],
+      });
+      if (
+        leadRecord?.Shepherded_By === "" ||
+        leadRecord?.Shepherded_By === null ||
+        leadRecord?.Shepherded_By === undefined
+      ) {
+        addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "2",
+              Action: "Shepherded By Added",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify({
+                Shepherded_By: currentUser?.id || "Unknown",
+              }),
+            },
+          ],
+        });
+      }
+      toast.success("Catalogue confirmed sent successfully");
       onCatalogueConfirm();
     } catch (error) {
       console.error("Error confirming catalog:", error);
@@ -184,6 +253,23 @@ const W2PackageCard = ({
         Service_City: serviceCity.trim(),
       });
       await fetchLeadRecord(leadRecord?.id);
+      await addAndUpdateLogs({
+        Name: leadRecord?.Last_Name || "Unknown",
+        Lead_ID: leadRecord?.id,
+        Mobile: leadRecord?.Mobile || "none",
+        RailLog_Owner: currentUser?.id || "Unknown",
+        Logs: [
+          {
+            Agent: currentUser?.id || "Unknown",
+            Rail_Stage: "2",
+            Action: "Customise Package",
+            Timestamp: new Date().toISOString(),
+            Data_Details: JSON.stringify({
+              Service_City: serviceCity.trim(),
+            }),
+          },
+        ],
+      });
       onSelectPackageForCustomization(selectedPackageId);
       onCustomisePackage();
     } catch (error) {
@@ -217,7 +303,7 @@ const W2PackageCard = ({
           <header className="rounded-2xl bg-primary px-4 py-4 text-primary-foreground md:px-6">
             <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
               <h2 className="text-lg font-semibold tracking-tight md:text-xl">
-              Package card + customise
+                Package card + customise
               </h2>
             </div>
           </header>
@@ -227,7 +313,7 @@ const W2PackageCard = ({
               htmlFor="w2-package-picker"
               className="text-sm font-medium text-foreground"
             >
-              [1] Package selector (dropdown)
+              Package selector <span className="text-destructive">*</span>
             </label>
             <select
               id="w2-package-picker"
@@ -462,9 +548,7 @@ const W2PackageCard = ({
             <button
               type="button"
               onClick={handleSendTemplate}
-              disabled={
-                !selectedPackageId || isLoadingTemplate
-              }
+              disabled={!selectedPackageId || isLoadingTemplate}
               className="btn-secondary min-h-12 min-w-48 disabled:cursor-not-allowed disabled:opacity-50 flex items-center gap-2 justify-center"
             >
               {isLoadingTemplate ? (
@@ -475,7 +559,7 @@ const W2PackageCard = ({
               ) : (
                 <>
                   <Send size={16} strokeWidth={2} />
-                 {isTemplateSent ? "Resend Template" : "Send template"}
+                  {isTemplateSent ? "Resend Template" : "Send template"}
                 </>
               )}
             </button>

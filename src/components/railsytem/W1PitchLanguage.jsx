@@ -3,6 +3,7 @@ import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { updateRecord } from "../../api/zohoCrm";
 import Loader from "../Loader";
 import { toast } from "sonner";
+import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
 const W1PitchLanguage = ({
   onPackageNamed = () => {},
@@ -10,7 +11,7 @@ const W1PitchLanguage = ({
   onNotSalesCall = () => {},
   onBack = () => {},
 }) => {
-  const { leadRecord, leadId, isLoading, error, fetchLeadRecord } =
+  const { leadRecord, leadId, isLoading, error, fetchLeadRecord, currentUser } =
     useZohoCrm();
   const leadPhone = leadRecord?.Mobile || "+91 98xxx xxxxx";
   const [pitchData, setPitchData] = useState({
@@ -42,9 +43,29 @@ const W1PitchLanguage = ({
     ) {
       try {
         setLoading(true);
+        const log = await addAndUpdateLogs({
+          Name: pitchData.callerName,
+          Lead_ID: leadId,
+          Rail_Log_Id: leadRecord?.Rail_Log_Id || "",
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "1",
+              Action: "Lead Contacted",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify({
+                Preferred_Language: pitchData.language,
+                Last_Name: pitchData.callerName,
+              }),
+            },
+          ],
+        });
         await updateRecord("Leads", leadId, {
           Last_Name: pitchData.callerName,
           Rail_Stage: "1",
+          Rail_Log_Id: leadRecord?.Rail_Log_Id || log?.id || "",
           Preferred_Language: pitchData.language,
         });
         await fetchLeadRecord(leadId);
@@ -76,12 +97,34 @@ const W1PitchLanguage = ({
     ) {
       try {
         setLoading(true);
+        const log = await addAndUpdateLogs({
+          Name: pitchData.callerName,
+          Lead_ID: leadId,
+          Rail_Log_Id: leadRecord?.Rail_Log_Id || "",
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "1",
+              Action: "Lead Contacted",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify({
+                Preferred_Language: pitchData.language,
+                Last_Name: pitchData.callerName,
+              }),
+            },
+          ],
+        });
         await updateRecord("Leads", leadId, {
           Last_Name: pitchData.callerName,
           Rail_Stage: "1",
+          Rail_Log_Id: leadRecord?.Rail_Log_Id || log?.id || "",
           Preferred_Language: pitchData.language,
         });
         await fetchLeadRecord(leadId);
+     
+        toast.success("Caller name and preferred language updated successfully.");
         onGuideCustomer();
       } catch (err) {
         toast.error("Failed to update caller name in Zoho CRM. Please try again.");
