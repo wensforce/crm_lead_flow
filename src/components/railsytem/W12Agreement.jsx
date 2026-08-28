@@ -133,7 +133,7 @@ const W12Agreement = ({
     }
     return getAgreementPdfFile({
       title: "Permanent Deployment Agreement",
-      clientName,
+      clientName: "[CLIENT NAME]",
       bodyHtml,
       bodyText,
     });
@@ -233,7 +233,13 @@ const W12Agreement = ({
       toast.success("Agreement sent");
       onSent();
     } catch (error) {
-      console.error("Failed to send agreement:", error);
+      console.error(
+        "Failed to send agreement:",
+        error,
+        error.message,
+        error.response?.data,
+        error.response?.status,
+      );
       toast.error(error.message || "Failed to send agreement");
     } finally {
       setLoading(false);
@@ -352,7 +358,6 @@ const W12Agreement = ({
 
           <AgreementTextEditor
             ref={editorRef}
-            lead={leadRecord}
             hidden={source !== "inbuilt"}
             onResetToStandard={() => {
               setSource("inbuilt");

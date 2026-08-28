@@ -1,65 +1,25 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { Bold, Italic, List, Plus, RotateCcw, Underline } from "lucide-react";
 
-const formatLeadDate = (value) => {
-  if (!value) return "";
-  const ms = Date.parse(String(value).replace(" ", "T"));
-  if (!Number.isFinite(ms)) return String(value);
-  return new Date(ms).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-};
-
-const countPhrase = (value, singular, plural) => {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num <= 0) return "";
-  return `${num} ${num === 1 ? singular : plural}`;
-};
-
-const buildPersonnelSummary = (lead = {}) => {
-  const type = String(lead.Armed_Unarmed || "").trim();
-  const armed = countPhrase(lead.No_of_Armed_Personnel, "armed officer", "armed officers");
-  const unarmed = countPhrase(
-    lead.No_of_UnArmed_Personnel,
-    "unarmed officer",
-    "unarmed officers",
-  );
-  const parts = [armed, unarmed].filter(Boolean);
-  if (parts.length) return parts.join(" and ");
-  if (type && type !== "None") return `${type.toLowerCase()} protective personnel as mutually agreed`;
-  return "trained protective personnel as mutually agreed";
-};
-
-const buildDefaultAgreementHtml = (lead = {}) => {
-  const name = lead.Last_Name || lead.Full_Name || "the Client";
-  const city = lead.Service_City || "the agreed city";
-  const site = lead.Site_Coverage_Location_s || "the agreed site";
-  const start =
-    formatLeadDate(lead.Service_Start_Date_And_Time) || "the start date";
-  const end =
-    formatLeadDate(lead.Service_End_Date_And_Time) ||
-    "until terminated in writing as per this Agreement";
-  const today = new Date().toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-  const phone = lead.Mobile || "the number on record";
-  const pillar = lead.Service_Pillar || "Protective Services";
-  const serviceLine = lead.Service_Line || "Executive Protection";
-  const motion = lead.Motion && lead.Motion !== "None" ? lead.Motion : "as agreed";
-  const shift =
-    lead.Shift_Pattern && lead.Shift_Pattern !== "None"
-      ? lead.Shift_Pattern
-      : "as mutually agreed";
-  const bodyguardType =
-    lead.Armed_Unarmed && lead.Armed_Unarmed !== "None"
-      ? lead.Armed_Unarmed
-      : "as mutually agreed";
-  const special = String(lead.Special_Requirements || "").trim() || "None specified";
-  const personnel = buildPersonnelSummary(lead);
+/**
+ * The standard draft ships with fill-in placeholders instead of CRM values.
+ * The agent replaces them in the editor before the agreement is sent.
+ */
+const buildDefaultAgreementHtml = () => {
+  const name = "[CLIENT NAME]";
+  const city = "[SERVICE CITY]";
+  const site = "[SITE / COVERAGE LOCATION]";
+  const start = "[SERVICE START DATE]";
+  const end = "[SERVICE END DATE]";
+  const today = "[AGREEMENT DATE]";
+  const phone = "[CLIENT PHONE NUMBER]";
+  const pillar = "[SERVICE PILLAR]";
+  const serviceLine = "[SERVICE LINE]";
+  const motion = "[MOTION]";
+  const shift = "[SHIFT PATTERN]";
+  const bodyguardType = "[ARMED / UNARMED]";
+  const special = "[SPECIAL REQUIREMENTS]";
+  const personnel = "[NUMBER AND TYPE OF PERSONNEL]";
 
   return `
     <h1 style="text-align:center;font-size:22px;margin:0 0 6px;">PERMANENT DEPLOYMENT AGREEMENT</h1>
@@ -98,7 +58,7 @@ const buildDefaultAgreementHtml = (lead = {}) => {
     <p><strong>2.5</strong> The Service Provider does not provide investigation, recovery, enforcement, or any service that would require the Personnel to act outside applicable law. The Client shall not instruct Personnel to perform any unlawful act, including but not limited to intimidation, illegal detention, trespass, or use of force except as strictly permitted in self-defence under Indian law.</p>
 
     <h2 style="font-size:16px;margin:22px 0 8px;">3. Term and commencement</h2>
-    <p><strong>3.1</strong> This Agreement shall commence on <strong>${start}</strong> and shall continue <strong>${end}</strong>.</p>
+    <p><strong>3.1</strong> This Agreement shall commence on <strong>${start}</strong> and shall continue until <strong>${end}</strong>, or until terminated in writing as per this Agreement.</p>
     <p><strong>3.2</strong> Deployment is confirmed only after (i) this Agreement is accepted as per Clause 18, and (ii) the Booking Amount is received in cleared funds.</p>
     <p><strong>3.3</strong> If the Client requests an earlier or later start date, the Service Provider shall confirm feasibility in writing / WhatsApp. A change of start date does not by itself vary the commercial terms unless the Parties agree otherwise.</p>
 
@@ -210,13 +170,12 @@ const buildDefaultAgreementHtml = (lead = {}) => {
   `.trim();
 };
 
-const buildBlankAgreementHtml = (lead = {}) => {
-  const name = lead.Last_Name || lead.Full_Name || "";
+const buildBlankAgreementHtml = () => {
   return `
     <h1 style="text-align:center;font-size:22px;margin:0 0 16px;">New Agreement</h1>
-    <p>Date:</p>
-    <p>Client: ${name}</p>
-    <p>City / Site:</p>
+    <p>Date: [AGREEMENT DATE]</p>
+    <p>Client: [CLIENT NAME]</p>
+    <p>City / Site: [SERVICE CITY] / [SITE / COVERAGE LOCATION]</p>
     <p></p>
     <p>1. Scope of services</p>
     <p></p>
@@ -242,7 +201,7 @@ const ToolbarButton = ({ title, onClick, children, className = "" }) => (
 );
 
 const AgreementTextEditor = forwardRef(
-  ({ lead = {}, hidden = false, onResetToStandard = () => {} }, ref) => {
+  ({ hidden = false, onResetToStandard = () => {} }, ref) => {
     const editorRef = useRef(null);
     const readyRef = useRef(false);
 
@@ -252,21 +211,21 @@ const AgreementTextEditor = forwardRef(
     };
 
     const loadStandard = () => {
-      setHtml(buildDefaultAgreementHtml(lead));
+      setHtml(buildDefaultAgreementHtml());
       readyRef.current = true;
     };
 
     const loadBlank = () => {
-      setHtml(buildBlankAgreementHtml(lead));
+      setHtml(buildBlankAgreementHtml());
       readyRef.current = true;
       editorRef.current?.focus();
     };
 
     useEffect(() => {
       if (readyRef.current || !editorRef.current) return;
-      setHtml(buildDefaultAgreementHtml(lead));
+      setHtml(buildDefaultAgreementHtml());
       readyRef.current = true;
-    }, [lead]);
+    }, []);
 
     useImperativeHandle(
       ref,
@@ -276,7 +235,7 @@ const AgreementTextEditor = forwardRef(
         getHtml: () => editorRef.current?.innerHTML || "",
         getText: () => editorRef.current?.innerText || "",
       }),
-      [lead],
+      [],
     );
 
     const runCommand = (command, value = null) => {

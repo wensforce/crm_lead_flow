@@ -247,32 +247,36 @@ const loadImage = (src) =>
     image.src = src;
   });
 
-const imageToPngDataUrl = (image) => {
-  if (!image) return null;
-  const canvas = document.createElement("canvas");
-  canvas.width = image.naturalWidth || image.width;
-  canvas.height = image.naturalHeight || image.height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx || !canvas.width || !canvas.height) return null;
-  ctx.drawImage(image, 0, 0);
-  return canvas.toDataURL("image/png");
-};
+/** Pixels per mm at the target raster resolution used for embedded artwork. */
+const PX_PER_MM = 150 / 25.4;
 
-const getImageFormat = (src = "") => {
-  const normalized = String(src).toLowerCase();
-  if (normalized.includes("image/png") || normalized.endsWith(".png")) {
-    return "PNG";
-  }
-  if (
-    normalized.includes("image/webp") ||
-    normalized.endsWith(".webp") ||
-    normalized.includes("image/jpeg") ||
-    normalized.endsWith(".jpg") ||
-    normalized.endsWith(".jpeg")
-  ) {
-    return "JPEG";
-  }
-  return "PNG";
+/**
+ * Rasterize an image at the size it is actually placed in the PDF.
+ * Source artwork is far larger than its printed footprint, and jsPDF stores
+ * whatever pixels it is handed, so scaling here is what keeps the file small.
+ */
+const imageToPngDataUrl = (image, widthMm, heightMm) => {
+  if (!image) return null;
+
+  const naturalWidth = image.naturalWidth || image.width;
+  const naturalHeight = image.naturalHeight || image.height;
+  if (!naturalWidth || !naturalHeight) return null;
+
+  const targetWidth = widthMm
+    ? Math.min(naturalWidth, Math.ceil(widthMm * PX_PER_MM))
+    : naturalWidth;
+  const targetHeight = heightMm
+    ? Math.min(naturalHeight, Math.ceil(heightMm * PX_PER_MM))
+    : naturalHeight;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+  return canvas.toDataURL("image/png");
 };
 
 const drawLogoPlaceholder = (doc, x, y, size = 22) => {
@@ -329,31 +333,28 @@ export async function generateEstimationPdf(data = {}) {
     orientation: "portrait",
     unit: "mm",
     format: "a4",
+    compress: true,
   });
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const marginX = 14;
   const contentWidth = pageWidth - marginX * 2;
 
-  const [logoImage, signatureImage, stampImage] = await Promise.all([
+  const [logoSource, signatureSource, stampSource] = await Promise.all([
     loadImage(COMPANY.logoUrl),
     loadImage(SIGNATURE_URL),
     loadImage(STAMP_URL),
   ]);
+  const logoImage = imageToPngDataUrl(logoSource, 22, 22);
+  const signatureImage = imageToPngDataUrl(signatureSource, 40, 14);
+  const stampImage = imageToPngDataUrl(stampSource, 34, 18);
 
   // Header band
   doc.setFillColor(15, 23, 42);
   doc.rect(0, 0, pageWidth, 38, "F");
 
   if (logoImage) {
-    doc.addImage(
-      logoImage,
-      getImageFormat(COMPANY.logoUrl),
-      marginX,
-      8,
-      22,
-      22,
-    );
+    doc.addImage(logoImage, "PNG", marginX, 8, 22, 22);
   } else {
     drawLogoPlaceholder(doc, marginX, 8, 22);
   }
@@ -555,14 +556,7 @@ export async function generateEstimationPdf(data = {}) {
   drawSignatureBox(doc, stampX, signY, boxWidth, boxHeight, STAMP_LABEL);
 
   if (signatureImage) {
-    doc.addImage(
-      signatureImage,
-      getImageFormat(SIGNATURE_URL),
-      signX + 10,
-      signY + 4,
-      40,
-      14,
-    );
+    doc.addImage(signatureImage, "PNG", signX + 10, signY + 4, 40, 14);
   } else {
     doc.setFont("helvetica", "italic");
     doc.setFontSize(12);
@@ -573,14 +567,7 @@ export async function generateEstimationPdf(data = {}) {
   }
 
   if (stampImage) {
-    doc.addImage(
-      stampImage,
-      getImageFormat(STAMP_URL),
-      stampX + 18,
-      signY + 3,
-      34,
-      18,
-    );
+    doc.addImage(stampImage, "PNG", stampX + 18, signY + 3, 34, 18);
   } else {
     doc.setDrawColor(148, 163, 184);
     doc.setLineDashPattern([1.5, 1.2], 0);
@@ -654,6 +641,7 @@ export async function generateAgreementPdf({
     orientation: "portrait",
     unit: "mm",
     format: "a4",
+    compress: true,
   });
 
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -666,18 +654,26 @@ export async function generateAgreementPdf({
     year: "numeric",
   });
 
+  const logoSize = 22;
+  const signatureWidth = 58;
+  const signatureHeight = 22;
+
   const [logoImage, signatureImage] = await Promise.all([
     loadImage(COMPANY.logoUrl),
     loadImage(SIGNATURE_URL),
   ]);
-  const logoDataUrl = imageToPngDataUrl(logoImage);
-  const signatureDataUrl = imageToPngDataUrl(signatureImage);
+  const logoDataUrl = imageToPngDataUrl(logoImage, logoSize, logoSize);
+  const signatureDataUrl = imageToPngDataUrl(
+    signatureImage,
+    signatureWidth,
+    signatureHeight,
+  );
 
   doc.setFillColor(15, 23, 42);
   doc.rect(0, 0, pageWidth, 32, "F");
 
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, "PNG", marginX, 5, 22, 22);
+    doc.addImage(logoDataUrl, "PNG", marginX, 5, logoSize, logoSize);
   } else {
     drawLogoPlaceholder(doc, marginX, 6, 18);
   }
@@ -741,8 +737,6 @@ export async function generateAgreementPdf({
     cursorY += 6;
   });
 
-  const signatureWidth = 58;
-  const signatureHeight = 22;
   let signatureY = Math.max(cursorY + 10, pageHeight - FOOTER_HEIGHT - SIGNATURE_BLOCK_HEIGHT);
   if (signatureY + SIGNATURE_BLOCK_HEIGHT > pageHeight - FOOTER_HEIGHT) {
     doc.addPage();
