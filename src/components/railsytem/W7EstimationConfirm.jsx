@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   UserRound,
   Shield,
@@ -129,6 +129,67 @@ const normalizeRowsForDirty = (rows = []) =>
     Final_Amount: parsePrice(row?.Final_Amount),
   }));
 
+const parseServiceDate = (value) => {
+  if (value == null || value === "") return null;
+  const ms = Date.parse(String(value).replace(" ", "T"));
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms);
+};
+
+const formatServiceDateLabel = (value) => {
+  const date = parseServiceDate(value);
+  if (!date) return "";
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+/** Inclusive calendar days from service dates; start-only counts as 1 day. */
+const deriveEstimationDaysFromLead = (lead) => {
+  const start = parseServiceDate(lead?.Service_Start_Date_And_Time);
+  if (!start) return 1;
+
+  const end = parseServiceDate(lead?.Service_End_Date_And_Time);
+  if (!end) return 1;
+
+  const startDay = new Date(start);
+  startDay.setHours(0, 0, 0, 0);
+  const endDay = new Date(end);
+  endDay.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((endDay - startDay) / (1000 * 60 * 60 * 24));
+  return Math.max(1, diffDays + 1);
+};
+
+/** End datetime for inclusive day count: 4 days from 1 Aug → 4 Aug (keeps start time). */
+const computeServiceEndDateTime = (startValue, days) => {
+  const start = parseServiceDate(startValue);
+  if (!start) return null;
+  const dayCount = Math.max(1, Number(days) || 1);
+  const end = new Date(start);
+  end.setDate(end.getDate() + dayCount - 1);
+  return formatZohoDateTime(end);
+};
+
+const serviceDurationHint = (lead, days) => {
+  const startLabel = formatServiceDateLabel(lead?.Service_Start_Date_And_Time);
+  if (!startLabel) return "No service start date on lead — defaulting to 1 day";
+
+  const dayCount = Math.max(1, Number(days) || deriveEstimationDaysFromLead(lead));
+  const computedEnd = computeServiceEndDateTime(
+    lead?.Service_Start_Date_And_Time,
+    dayCount,
+  );
+  const endLabel =
+    formatServiceDateLabel(computedEnd) ||
+    formatServiceDateLabel(lead?.Service_End_Date_And_Time);
+
+  if (!endLabel) return `${startLabel} only — counted as 1 day`;
+  const dayLabel = dayCount === 1 ? "1 day" : `${dayCount} days`;
+  return `${startLabel} → ${endLabel} (${dayLabel})`;
+};
+
 const EstimationConfirm = ({
   onApprove = () => {},
   onReject = () => {},
@@ -160,6 +221,9 @@ const EstimationConfirm = ({
   const [isDelaying, setIsDelaying] = useState(false);
   const [isUpdateTableModalOpen, setIsUpdateTableModalOpen] = useState(false);
   const [exotelRecordingUrl, setExotelRecordingUrl] = useState("");
+  const [estimationDays, setEstimationDays] = useState(1);
+  const [initialEstimationDays, setInitialEstimationDays] = useState(1);
+  const estimationDaysEditedRef = useRef(false);
   const roleName = String(currentUser?.role?.name || "")
     .trim()
     .toLowerCase();
@@ -214,6 +278,17 @@ const EstimationConfirm = ({
     setEditableAddonServices(loaded);
     setInitialAddonServices(loaded);
   }, [leadRecord?.Addon_Service, leadRecord?.Additional_Services]);
+
+  useEffect(() => {
+    if (!leadRecord || estimationDaysEditedRef.current) return;
+    const days = deriveEstimationDaysFromLead(leadRecord);
+    setEstimationDays(days);
+    setInitialEstimationDays(days);
+  }, [
+    leadRecord?.Service_Start_Date_And_Time,
+    leadRecord?.Service_End_Date_And_Time,
+    leadRecord,
+  ]);
 
   useEffect(() => {
     if (!leadRecord) return;
@@ -385,12 +460,19 @@ const EstimationConfirm = ({
   const packageUsesRange = isOpenPackageEstimation && packageHasAddOns;
   const packageIsFixedRate = isOpenPackageEstimation && !packageHasAddOns;
 
-  const startPrice = useMemo(() => {
+  const dailyStartPrice = useMemo(() => {
     if (isOpenPackageEstimation && packageStartPrice > 0)
       return packageStartPrice;
     if (guidedGrandTotal > 0) return guidedGrandTotal;
     return packageStartPrice;
   }, [isOpenPackageEstimation, packageStartPrice, guidedGrandTotal]);
+
+  const effectiveEstimationDays = Math.max(1, Number(estimationDays) || 1);
+
+  const startPrice = useMemo(
+    () => Math.round(dailyStartPrice * effectiveEstimationDays),
+    [dailyStartPrice, effectiveEstimationDays],
+  );
 
   const endingPrice = useMemo(() => {
     if (packageIsFixedRate) return startPrice;
@@ -424,6 +506,9 @@ const EstimationConfirm = ({
     initialAddonServices,
   );
 
+  const isEstimationDaysDirty =
+    effectiveEstimationDays !== Math.max(1, Number(initialEstimationDays) || 1);
+
   const isDirty = useMemo(() => {
     return (
       JSON.stringify(normalizeRowsForDirty(editableBodyguardRows)) !==
@@ -431,7 +516,8 @@ const EstimationConfirm = ({
       JSON.stringify(normalizeRowsForDirty(editableCarRows)) !==
         JSON.stringify(normalizeRowsForDirty(initialCarRows)) ||
       isPackageMarginDirty ||
-      isAddonServicesDirty
+      isAddonServicesDirty ||
+      isEstimationDaysDirty
     );
   }, [
     editableBodyguardRows,
@@ -440,6 +526,7 @@ const EstimationConfirm = ({
     initialCarRows,
     isPackageMarginDirty,
     isAddonServicesDirty,
+    isEstimationDaysDirty,
   ]);
 
   const canEditMargins =
@@ -449,6 +536,9 @@ const EstimationConfirm = ({
         editableAddonServices.length > 0)) ||
     packageUsesRange ||
     (isOpenPackageEstimation && editableAddonServices.length > 0);
+
+  const canEditEstimation =
+    canEditMargins || Boolean(leadRecord?.Service_Start_Date_And_Time);
 
   const updateBodyguardMargin = (index, marginValue) => {
     setEditableBodyguardRows((prev) =>
@@ -653,25 +743,39 @@ const EstimationConfirm = ({
         };
       }
 
+      const serviceEndDateTime = computeServiceEndDateTime(
+        leadRecord?.Service_Start_Date_And_Time,
+        effectiveEstimationDays,
+      );
+      if (serviceEndDateTime) {
+        payload.Service_End_Date_And_Time = serviceEndDateTime;
+      }
+
       await updateRecord("Leads", leadRecord?.id, payload);
       await fetchLeadRecord(leadRecord?.id);
-      await addAndUpdateLogs({
-        Name: leadRecord?.Last_Name || "Unknown",
-        Lead_ID: leadRecord?.id,
-        Mobile: leadRecord?.Mobile || "none",
-        RailLog_Owner: currentUser?.id || "Unknown",
-        Logs: [
-          {
-            Agent: currentUser?.id || "Unknown",
-            Rail_Stage: "7",
-            Action: "Approved Saved",
-            Timestamp: new Date().toISOString(),
-            Data_Details: JSON.stringify(payload),
-          },
-        ],
-      });
+      try {
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "7",
+              Action: "Approved Saved",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify(payload),
+            },
+          ],
+        });
+      } catch (error) {
+        console.log(JSON.stringify(error));
+      }
       setIsEditingMargins(false);
       setInitialPackageMargin(packageMargin);
+      setInitialEstimationDays(effectiveEstimationDays);
+      estimationDaysEditedRef.current = false;
       setInitialAddonServices(cloneAddonServices(editableAddonServices));
       setApprovalState("approved");
       toast.success(
@@ -714,24 +818,28 @@ const EstimationConfirm = ({
       await updateRecord("Leads", leadRecord.id, {
         Estimate_Deadline_At: nextDeadlineValue,
       });
-      await addAndUpdateLogs({
-        Name: leadRecord?.Last_Name || "Unknown",
-        Lead_ID: leadRecord?.id,
-        Mobile: leadRecord?.Mobile || "none",
-        RailLog_Owner: currentUser?.id || "Unknown",
-        Logs: [
-          {
-            Agent: currentUser?.id || "Unknown",
-            Rail_Stage: "7",
-            Action: "Estimate Deadline Delayed",
-            Timestamp: new Date().toISOString(),
-            Data_Details: JSON.stringify({
-              Delayed_By: minutes,
-              Estimate_Deadline_At: nextDeadlineValue,
-            }),
-          },
-        ],
-      });
+      try {
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "7",
+              Action: "Estimate Deadline Delayed",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify({
+                Delayed_By: minutes,
+                Estimate_Deadline_At: nextDeadlineValue,
+              }),
+            },
+          ],
+        });
+      } catch (error) {
+        console.log(JSON.stringify(error));
+      }
 
       setDeadlineAtMs(nextDeadlineMs);
       setSecondsLeft(secondsUntil(nextDeadlineMs));
@@ -1425,31 +1533,81 @@ const EstimationConfirm = ({
             </p>
             <p className="mt-2 text-xs text-gray-500">
               {packageIsFixedRate
-                ? "Fixed package price (no additional services) — only start is saved"
+                ? "Per-day total × service days — fixed package (only start is saved)"
                 : isOpenPackageEstimation
-                  ? "Start price is from package pricing"
-                  : "Start price is sum of product finals"}
+                  ? "Per-day package total × service days"
+                  : "Per-day product total × service days"}
               {isEditingMargins
                 ? packageUsesRange
-                  ? " (updates live when you change package margin)"
-                  : " (updates live when you change margins)"
+                  ? " (updates live when you change package margin or service days)"
+                  : " (updates live when you change margins or service days)"
                 : ""}
               {!packageIsFixedRate
-                ? `. End = start + ${packageMargin}%. Starting price is not manually editable.`
+                ? `. End = total + ${packageMargin}%.`
                 : "."}
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <label
+                htmlFor="w7-estimation-days"
+                className="text-sm font-medium text-gray-600 whitespace-nowrap"
+              >
+                Service days
+              </label>
+              {isEditingMargins ? (
+                <input
+                  id="w7-estimation-days"
+                  type="number"
+                  min="1"
+                  max="365"
+                  step="1"
+                  value={estimationDays}
+                  onChange={(e) => {
+                    estimationDaysEditedRef.current = true;
+                    const raw = e.target.value;
+                    if (raw === "") {
+                      setEstimationDays("");
+                      return;
+                    }
+                    setEstimationDays(Math.max(1, Math.floor(Number(raw) || 1)));
+                  }}
+                  className="w-24 rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              ) : (
+                <span className="inline-flex min-h-10 min-w-24 items-center rounded-md border border-border bg-muted/40 px-3 text-sm font-semibold text-foreground">
+                  {effectiveEstimationDays}
+                </span>
+              )}
+              <span className="text-sm text-gray-500">
+                Per day: {formatMoney(dailyStartPrice)}
+              </span>
+              {!isEditingMargins && canEditEstimation ? (
+                <span className="text-xs text-gray-400">
+                  Turn on Edit to change service days
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1 text-xs text-gray-400">
+              {serviceDurationHint(leadRecord, effectiveEstimationDays)}
             </p>
             <div
               className={`mt-4 grid gap-3 ${
-                packageIsFixedRate ? "md:grid-cols-1" : "md:grid-cols-3"
+                packageIsFixedRate ? "md:grid-cols-2" : "md:grid-cols-2 lg:grid-cols-4"
               }`}
             >
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                <p className="text-xs text-gray-500">Starting Price</p>
+                <p className="text-xs text-gray-500">Per-day rate</p>
                 <p className="mt-1 text-sm font-semibold text-gray-900">
-                  {formatMoney(startPrice)}
+                  {formatMoney(dailyStartPrice)}
                 </p>
               </div>
-              {!packageIsFixedRate && (
+              {packageIsFixedRate ? (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                  <p className="text-xs text-gray-500">Total price</p>
+                  <p className="mt-1 text-sm font-semibold text-gray-900">
+                    {formatMoney(startPrice)}
+                  </p>
+                </div>
+              ) : (
                 <>
                   <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
                     <p className="text-xs text-gray-500">Margin</p>
@@ -1480,6 +1638,12 @@ const EstimationConfirm = ({
                         {packageMargin}%
                       </p>
                     )}
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                    <p className="text-xs text-gray-500">Total starting price</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">
+                      {formatMoney(startPrice)}
+                    </p>
                   </div>
                   <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
                     <p className="text-xs text-gray-500">Ending Price</p>
@@ -1526,7 +1690,7 @@ const EstimationConfirm = ({
             Reject
           </button> */}
 
-            {canEditMargins && (
+            {canEditEstimation && (
               <button
                 type="button"
                 onClick={() => setIsEditingMargins((prev) => !prev)}

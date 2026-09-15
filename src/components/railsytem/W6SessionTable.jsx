@@ -105,24 +105,28 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
         Additional_Services: serializeAdditionalServicesString(editableAddonServices),
       })
       await fetchLeadRecord(leadRecord.id)
-      await addAndUpdateLogs({
-        Name: leadRecord?.Last_Name || "Unknown",
-        Lead_ID: leadRecord?.id,
-        Mobile: leadRecord?.Mobile || "none",
-        RailLog_Owner: currentUser?.id || "Unknown",
-        Logs: [
-          {
-            Agent: currentUser?.id || "Unknown",
-            Rail_Stage: "5",
-            Action: "Addon Services Saved",
-            Timestamp: new Date().toISOString(),
-            Data_Details: JSON.stringify({
-              Addon_Service: serialized,
-              Additional_Services: serializeAdditionalServicesString(editableAddonServices),
-            }),
-          },
-        ],
-      })
+      try {
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "5",
+              Action: "Addon Services Saved",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify({
+                Addon_Service: serialized,
+                Additional_Services: serializeAdditionalServicesString(editableAddonServices),
+              }),
+            },
+          ],
+        })
+      } catch (error) {
+        console.log(JSON.stringify(error))
+      }
       const saved = cloneAddonServices(editableAddonServices)
       setInitialAddonServices(saved)
       toast.success('Add-on services saved')
@@ -140,26 +144,30 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
   const isDeckSent = deckSent || Boolean(leadRecord?.Catalog_Sent)
 
   const sendDeckTemplate = async () => {
-    sendDeck({ leadRecord, bodyguardRows, carRows })
+    sendDeck({ leadRecord, bodyguardRows, carRows, editableAddonServices })
       .then(async () => {
         await updateRecord("Leads", leadRecord?.id, { Catalog_Sent: true })
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "5",
-              Action: "Catalog Sent",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
-                Catalog_Sent: true,
-              }),
-            },
-          ],
-        })
+        try {
+          await addAndUpdateLogs({
+            Name: leadRecord?.Last_Name || "Unknown",
+            Lead_ID: leadRecord?.id,
+            Mobile: leadRecord?.Mobile || "none",
+            RailLog_Owner: currentUser?.id || "Unknown",
+            Logs: [
+              {
+                Agent: currentUser?.id || "Unknown",
+                Rail_Stage: "5",
+                Action: "Catalog Sent",
+                Timestamp: new Date().toISOString(),
+                Data_Details: JSON.stringify({
+                  Catalog_Sent: true,
+                }),
+              },
+            ],
+          })
+        } catch (error) {
+          console.log(JSON.stringify(error))
+        }
         setLeadRecord({ ...leadRecord, Catalog_Sent: true })
         toast.success("Deck sent successfully");
       })
@@ -199,25 +207,29 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
           Lead_Status: 'Deck Sent',
         })
         await fetchLeadRecord(leadRecord?.id)
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "5",
-              Action: "Deck Sent Saved",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
-                Rail_Stage: '5',
-                Open_Package_Estimation: false,
-                Lead_Status: 'Deck Sent',
-              }),
-            },
-          ],
-        })
+        try {
+          await addAndUpdateLogs({
+            Name: leadRecord?.Last_Name || "Unknown",
+            Lead_ID: leadRecord?.id,
+            Mobile: leadRecord?.Mobile || "none",
+            RailLog_Owner: currentUser?.id || "Unknown",
+            Logs: [
+              {
+                Agent: currentUser?.id || "Unknown",
+                Rail_Stage: "5",
+                Action: "Deck Sent Saved",
+                Timestamp: new Date().toISOString(),
+                Data_Details: JSON.stringify({
+                  Rail_Stage: '5',
+                  Open_Package_Estimation: false,
+                  Lead_Status: 'Deck Sent',
+                }),
+              },
+            ],
+          })
+        } catch (error) {
+          console.log(JSON.stringify(error))
+        }
       }
 
       onContinueToQualify()

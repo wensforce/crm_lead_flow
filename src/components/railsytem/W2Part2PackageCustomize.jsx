@@ -191,23 +191,27 @@ const W2Part2PackageCustomize = ({
       await updateRecord("Leads", leadRecord?.id, {
         Customised_Package_Sent_Template: true,
       });
-      await addAndUpdateLogs({
-        Name: leadRecord?.Last_Name || "Unknown",
-        Lead_ID: leadRecord?.id,
-        Mobile: leadRecord?.Mobile || "none",
-        RailLog_Owner: currentUser?.id || "Unknown",
-        Logs: [
-          {
-            Agent: currentUser?.id || "Unknown",
-            Rail_Stage: "2.5",
-            Action: "Customised Package Sent Template",
-            Timestamp: new Date().toISOString(),
-            Data_Details: JSON.stringify({
-              Customised_Package_Sent_Template: true,
-            }),
-          },
-        ],
-      });
+      try {
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "2.5",
+              Action: "Customised Package Sent Template",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify({
+                Customised_Package_Sent_Template: true,
+              }),
+            },
+          ],
+        });
+      } catch (error) {
+        console.log(JSON.stringify(error));
+      }
       setTemplateSent(true);
     } catch (err) {
       console.error("Failed to send template:", err);
@@ -247,11 +251,35 @@ const W2Part2PackageCustomize = ({
           ? { Shepherded_By: currentUser?.id || "Unknown" }
           : {}),
       });
-      if (
-        leadRecord?.Shepherded_By === "" ||
-        leadRecord?.Shepherded_By === null ||
-        leadRecord?.Shepherded_By === undefined
-      ) {
+      try {
+        if (
+          leadRecord?.Shepherded_By === "" ||
+          leadRecord?.Shepherded_By === null ||
+          leadRecord?.Shepherded_By === undefined
+        ) {
+          await addAndUpdateLogs({
+            Name: leadRecord?.Last_Name || "Unknown",
+            Lead_ID: leadRecord?.id,
+            Mobile: leadRecord?.Mobile || "none",
+            RailLog_Owner: currentUser?.id || "Unknown",
+            Logs: [
+              {
+                Agent: currentUser?.id || "Unknown",
+                Rail_Stage: "2.5",
+                Action: "Shepherded By Added",
+                Timestamp: new Date().toISOString(),
+                Data_Details: JSON.stringify({
+                  Shepherded_By: currentUser?.id || "Unknown",
+                }),
+              },
+            ],
+          });
+        }
+      } catch (error) {
+        console.log(JSON.stringify(error));
+      }
+      await fetchLeadRecord(leadRecord?.id);
+      try {
         await addAndUpdateLogs({
           Name: leadRecord?.Last_Name || "Unknown",
           Lead_ID: leadRecord?.id,
@@ -261,42 +289,26 @@ const W2Part2PackageCustomize = ({
             {
               Agent: currentUser?.id || "Unknown",
               Rail_Stage: "2.5",
-              Action: "Shepherded By Added",
+              Action: "Customised Package Sent Template Saved",
               Timestamp: new Date().toISOString(),
               Data_Details: JSON.stringify({
-                Shepherded_By: currentUser?.id || "Unknown",
+                Package_Id: selectedPackageId,
+                Additional_Armed: addedArmedBodyguards,
+                Additional_Unarmed: addedUnarmedBodyguards,
+                Additional_Luxury_Car: addedLuxuryVehicles,
+                Additional_Standard_Car: addedStandardVehicles,
+                Additional_Services:
+                  serializeAdditionalServicesString(selectedServices),
+                Addon_Service: serializeAddonServicesForCrm(selectedServices),
+                Service_City: serviceCity.trim(),
+                Rail_Stage: "2.5",
               }),
             },
           ],
         });
+      } catch (error) {
+        console.log(JSON.stringify(error));
       }
-      await fetchLeadRecord(leadRecord?.id);
-      await addAndUpdateLogs({
-        Name: leadRecord?.Last_Name || "Unknown",
-        Lead_ID: leadRecord?.id,
-        Mobile: leadRecord?.Mobile || "none",
-        RailLog_Owner: currentUser?.id || "Unknown",
-        Logs: [
-          {
-            Agent: currentUser?.id || "Unknown",
-            Rail_Stage: "2.5",
-            Action: "Customised Package Sent Template Saved",
-            Timestamp: new Date().toISOString(),
-            Data_Details: JSON.stringify({
-              Package_Id: selectedPackageId,
-              Additional_Armed: addedArmedBodyguards,
-              Additional_Unarmed: addedUnarmedBodyguards,
-              Additional_Luxury_Car: addedLuxuryVehicles,
-              Additional_Standard_Car: addedStandardVehicles,
-              Additional_Services:
-                serializeAdditionalServicesString(selectedServices),
-              Addon_Service: serializeAddonServicesForCrm(selectedServices),
-              Service_City: serviceCity.trim(),
-              Rail_Stage: "2.5",
-            }),
-          },
-        ],
-      });
       setLoading(false);
       onContinue();
     } catch (err) {

@@ -41,7 +41,9 @@ const UNARMED_TYPES = [
   "MMM Fighter Bodyguard",
 ];
 
-const CAR_BODY_TYPES = [
+// Default dropdown values, shown until the live "Products" catalog loads
+// and merged with whatever real Car_Type / Car_Make values it returns.
+const FALLBACK_CAR_BODY_TYPES = [
   "SUV",
   "Sedan",
   "Hatchback",
@@ -50,7 +52,7 @@ const CAR_BODY_TYPES = [
   "Lounge",
 ];
 
-const CAR_MAKES = [
+const FALLBACK_CAR_MAKES = [
   "Toyota",
   "Honda",
   "Hyundai",
@@ -62,6 +64,12 @@ const CAR_MAKES = [
   "Mercedes-Benz",
   "Audi",
 ];
+
+/** Sorted list of unique, non-empty, trimmed string values. */
+const uniqueValues = (list) =>
+  Array.from(new Set(list.map((v) => String(v || "").trim())))
+    .filter(Boolean)
+    .sort();
 
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -95,7 +103,7 @@ const createCarItem = () => ({
   crmRowId: null,
   kind: "car",
   photoSent: false,
-  carBodyType: CAR_BODY_TYPES[0],
+  carBodyType: FALLBACK_CAR_BODY_TYPES[0],
   selectedProductId: "",
   productImageUrl: "",
   carLabel: "",
@@ -276,6 +284,15 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
   const [sentProductIds, setSentProductIds] = React.useState(new Set());
   const [isSaving, setIsSaving] = React.useState(false);
   const [isDirty, setIsDirty] = React.useState(false);
+  // All Car Body Type options (e.g. "Sedan", "SUV") — fetched once from the
+  // Products catalog. Falls back to the hardcoded list if none are found.
+  const [carBodyTypeOptions, setCarBodyTypeOptions] = React.useState(
+    FALLBACK_CAR_BODY_TYPES,
+  );
+  // Car Make options per body type, e.g. { Sedan: ["Honda", "Toyota"] }.
+  // Fetched lazily the first time a body type is used, so a make only shows
+  // up under a body type if a product actually exists for that pairing.
+  const [carMakesByType, setCarMakesByType] = React.useState({});
   // ref so fetchProductsForItem (stable callback) can read latest sentProductIds
   const sentProductIdsRef = React.useRef(new Set());
   const initializedLeadIdRef = React.useRef(null);
@@ -297,6 +314,51 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
   React.useEffect(() => {
     sentProductIdsRef.current = sentProductIds;
   }, [sentProductIds]);
+
+  // ---- 1. fetch every Car Body Type once ----
+  // Gated on leadRecord.id (not just mount) because Zoho's embedded API isn't
+  // actually responsive until the "PageLoad" handshake completes.
+  React.useEffect(() => {
+    if (!leadRecord?.id) return;
+    searchRecord("Products", "(Product_Category:equals:Car)")
+      .then((products) => {
+        const types = uniqueValues((products || []).map((p) => p.Car_Type));
+        setCarBodyTypeOptions(types.length > 0 ? types : FALLBACK_CAR_BODY_TYPES);
+      })
+      .catch((err) => {
+        console.error("Failed to load car body types:", err);
+        setCarBodyTypeOptions(FALLBACK_CAR_BODY_TYPES);
+      });
+  }, [leadRecord?.id]);
+
+  // ---- 2. fetch Car Make options for one body type (cached) ----
+  const loadCarMakesForType = React.useCallback((bodyType) => {
+    if (!bodyType) return;
+    setCarMakesByType((prev) => {
+      if (prev[bodyType]) return prev; // already loaded
+      searchRecord(
+        "Products",
+        `(Product_Category:equals:Car)AND(Car_Type:equals:${bodyType})`,
+      )
+        .then((products) => {
+          const makes = uniqueValues((products || []).map((p) => p.Car_Make));
+          setCarMakesByType((cur) => ({ ...cur, [bodyType]: makes }));
+        })
+        .catch((err) => {
+          console.error("Failed to load car makes:", err);
+          setCarMakesByType((cur) => ({ ...cur, [bodyType]: [] }));
+        });
+      return prev;
+    });
+  }, []);
+
+  // Whenever a car row's body type changes (or a new one appears), make sure
+  // its makes are fetched.
+  React.useEffect(() => {
+    items
+      .filter((item) => item.kind === "car")
+      .forEach((item) => loadCarMakesForType(item.carBodyType));
+  }, [items, loadCarMakesForType]);
 
   // ---- fetch products from Zoho filtered by type ----
   const fetchProductsForItem = React.useCallback(
@@ -436,7 +498,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
           crmRowId: row.id,
           kind: "car",
           photoSent: false,
-          carBodyType: row.Car_Type || CAR_BODY_TYPES[0],
+          carBodyType: row.Car_Type || FALLBACK_CAR_BODY_TYPES[0],
           selectedProductId: "",
           productImageUrl: "",
           carLabel: row.Car_Label || "",
@@ -516,19 +578,27 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
     setScrollToId(null);
   }, [items, scrollToId]);
 
-  // sync photoSent status based on product code and sent templates
+  // Re-sync when sent codes change or rows gain/lose a product (e.g. duplicate).
+  const itemProductKey = items
+    .map((item) => `${item.id}:${item.selectedProductId || ""}:${item.productCode || ""}`)
+    .join("|");
+
   React.useEffect(() => {
-    setItems((prev) =>
-      prev.map((item) => ({
-        ...item,
-        photoSent: !!(
+    setItems((prev) => {
+      let changed = false;
+      const next = prev.map((item) => {
+        const photoSent = !!(
           item.selectedProductId &&
           item.productCode &&
           sentProductIds.has(item.productCode)
-        ),
-      })),
-    );
-  }, [sentProductIds]);
+        );
+        if (photoSent === item.photoSent) return item;
+        changed = true;
+        return { ...item, photoSent };
+      });
+      return changed ? next : prev;
+    });
+  }, [sentProductIds, itemProductKey]);
 
   // ---- apply a selected Zoho product to an item ----
   const selectProduct = React.useCallback(
@@ -617,6 +687,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
           return {
             ...item,
             [key]: value,
+            carMake: "", // available makes depend on body type — clear the old pick
             selectedProductId: "",
             productImageUrl: "",
           };
@@ -643,11 +714,8 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
       fetchProductsForItem(id, "bodyguard", newType);
     }
     if (key === "carBodyType") {
-      const current = items.find((item) => item.id === id);
-      fetchProductsForItem(id, "car", {
-        carType: value,
-        carMake: current?.carMake || "",
-      });
+      // carMake was just cleared above since it depends on the body type.
+      fetchProductsForItem(id, "car", { carType: value, carMake: "" });
     }
     if (key === "carMake") {
       const current = items.find((item) => item.id === id);
@@ -697,23 +765,27 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
         { Product_Sent_Template: updatedTemplateValue },
         ["workflow"],
       );
-      await addAndUpdateLogs({
-        Name: leadRecord?.Last_Name || "Unknown",
-        Lead_ID: leadRecord?.id,
-        Mobile: leadRecord?.Mobile || "none",
-        RailLog_Owner: currentUser?.id || "Unknown",
-        Logs: [
-          {
-            Agent: currentUser?.id || "Unknown",
-            Rail_Stage: "4",
-            Action: `Product Photo Sent ${item.productCode}`,
-            Timestamp: new Date().toISOString(),
-            Data_Details: JSON.stringify({
-              Product_Sent_Template: updatedTemplateValue,
-            }),
-          },
-        ],
-      });
+      try {
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "4",
+              Action: `Product Photo Sent ${item.productCode}`,
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify({
+                Product_Sent_Template: updatedTemplateValue,
+              }),
+            },
+          ],
+        });
+      } catch (error) {
+        console.log(JSON.stringify(error));
+      }
       toast.success("Photo sent successfully");
       // update local state
       setSentProductIds(newSentCodes);
@@ -816,27 +888,31 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
       ["workflow"],
     );
     await fetchLeadRecord(leadRecord.id);
-    await addAndUpdateLogs({
-      Name: leadRecord?.Last_Name || "Unknown",
-      Lead_ID: leadRecord?.id,
-      Mobile: leadRecord?.Mobile || "none",
-      RailLog_Owner: currentUser?.id || "Unknown",
-      Logs: [
-        {
-          Agent: currentUser?.id || "Unknown",
-          Rail_Stage: "4",
-          Action: "Guided Catalogue Sent Saved",
-          Timestamp: new Date().toISOString(),
-          Data_Details: JSON.stringify({
-            Bodyguard_Requirements: bgRows,
-            Car_Requirements: carRows,
+    try {
+      await addAndUpdateLogs({
+        Name: leadRecord?.Last_Name || "Unknown",
+        Lead_ID: leadRecord?.id,
+        Mobile: leadRecord?.Mobile || "none",
+        RailLog_Owner: currentUser?.id || "Unknown",
+        Logs: [
+          {
+            Agent: currentUser?.id || "Unknown",
             Rail_Stage: "4",
-            Guided_Catalog_Sent: false,
-            Lead_Status: "Guided Catalogue Sent",
-          }),
-        },
-      ],
-    });
+            Action: "Guided Catalogue Sent Saved",
+            Timestamp: new Date().toISOString(),
+            Data_Details: JSON.stringify({
+              Bodyguard_Requirements: bgRows,
+              Car_Requirements: carRows,
+              Rail_Stage: "4",
+              Guided_Catalog_Sent: false,
+              Lead_Status: "Guided Catalogue Sent",
+            }),
+          },
+        ],
+      });
+    } catch (error) {
+      console.log(JSON.stringify(error));
+    }
   };
 
   const removeItem = (id) => {
@@ -847,6 +923,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
       return n;
     });
     if (expandedId === id) setExpandedId(null);
+    setIsDirty(true);
   };
 
   const duplicateItem = (id) => {
@@ -857,7 +934,11 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
         ...source,
         id: makeId(),
         crmRowId: null,
-        photoSent: false,
+        photoSent: !!(
+          source.selectedProductId &&
+          source.productCode &&
+          sentProductIds.has(source.productCode)
+        ),
       };
       const sourceIndex = prev.findIndex((item) => item.id === id);
       const next = [...prev];
@@ -871,6 +952,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
       fetchProductsForItem(clone.id, clone.kind, filterValue);
       return next;
     });
+    setIsDirty(true);
   };
 
   const allPhotosSent =
@@ -893,10 +975,11 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
     setExpandedId(next.id);
     setScrollToId(next.id);
     fetchProductsForItem(next.id, "bodyguard", next.bodyguardType);
+    setIsDirty(true);
   };
 
   const addCar = () => {
-    const next = createCarItem();
+    const next = { ...createCarItem(), carBodyType: carBodyTypeOptions[0] };
     setItems((prev) => [...prev, next]);
     setExpandedId(next.id);
     setScrollToId(next.id);
@@ -904,6 +987,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
       carType: next.carBodyType,
       carMake: next.carMake,
     });
+    setIsDirty(true);
   };
 
   const getItemTitle = (item, index) => {
@@ -1511,7 +1595,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                             updateItem(item.id, "carBodyType", e.target.value)
                           }
                         >
-                          {CAR_BODY_TYPES.map((option) => (
+                          {carBodyTypeOptions.map((option) => (
                             <option key={option}>{option}</option>
                           ))}
                         </select>
@@ -1528,11 +1612,13 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                           }
                         >
                           <option value="">Any make</option>
-                          {CAR_MAKES.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
+                          {(carMakesByType[item.carBodyType] || []).map(
+                            (option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ),
+                          )}
                         </select>
                       </label>
                     </div>

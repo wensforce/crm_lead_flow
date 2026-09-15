@@ -396,52 +396,9 @@ const W3GuidedRequirement = ({
             ? { Shepherded_By: currentUser?.id || "Unknown" }
             : {}),
         });
- 
+
         await fetchLeadRecord(leadRecord?.id);
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "3",
-              Action: "Guided Service Discovered",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
-                Service_Pillar: formData.servicePillar,
-                Service_Line: formData.serviceLine,
-                Motion: formData.motion,
-                Deployment_Type: formData.deploymentType,
-                Service_City: formData.city,
-                Site_Coverage_Location_s: formData.site,
-                Service_Start_Date_And_Time: fromDateTimeLocalValue(
-                  formData.startDate,
-                ),
-                Service_End_Date_And_Time: fromDateTimeLocalValue(
-                  formData.endDate,
-                ),
-                Armed_Unarmed: formData.bodyguardType,
-                No_of_Armed_Personnel: formData.armedCount,
-                No_of_UnArmed_Personnel: formData.unarmedCount,
-                Shift_Pattern: formData.shiftPattern,
-                Car_Segement: formData.Car_Segement,
-                No_of_Standard_Car: formData.standardCars,
-                No_of_Luxury_Car: formData.luxuryCars,
-                Car_Booking_Type: formData.carBookingType,
-                Special_Requirements: formData.specialRequirement,
-                Rail_Stage: "3",
-                Lead_Status: "Service Discovered",
-              }),
-            },
-          ],
-        });
-        if (
-          leadRecord?.Shepherded_By === "" ||
-          leadRecord?.Shepherded_By === null ||
-          leadRecord?.Shepherded_By === undefined
-        ) {
+        try {
           await addAndUpdateLogs({
             Name: leadRecord?.Last_Name || "Unknown",
             Lead_ID: leadRecord?.id,
@@ -451,14 +408,62 @@ const W3GuidedRequirement = ({
               {
                 Agent: currentUser?.id || "Unknown",
                 Rail_Stage: "3",
-                Action: "Shepherded By Added",
+                Action: "Guided Service Discovered",
                 Timestamp: new Date().toISOString(),
                 Data_Details: JSON.stringify({
-                  Shepherded_By: currentUser?.id || "Unknown",
+                  Service_Pillar: formData.servicePillar,
+                  Service_Line: formData.serviceLine,
+                  Motion: formData.motion,
+                  Deployment_Type: formData.deploymentType,
+                  Service_City: formData.city,
+                  Site_Coverage_Location_s: formData.site,
+                  Service_Start_Date_And_Time: fromDateTimeLocalValue(
+                    formData.startDate,
+                  ),
+                  Service_End_Date_And_Time: fromDateTimeLocalValue(
+                    formData.endDate,
+                  ),
+                  Armed_Unarmed: formData.bodyguardType,
+                  No_of_Armed_Personnel: formData.armedCount,
+                  No_of_UnArmed_Personnel: formData.unarmedCount,
+                  Shift_Pattern: formData.shiftPattern,
+                  Car_Segement: formData.Car_Segement,
+                  No_of_Standard_Car: formData.standardCars,
+                  No_of_Luxury_Car: formData.luxuryCars,
+                  Car_Booking_Type: formData.carBookingType,
+                  Special_Requirements: formData.specialRequirement,
+                  Rail_Stage: "3",
+                  Lead_Status: "Service Discovered",
                 }),
               },
             ],
           });
+
+          if (
+            leadRecord?.Shepherded_By === "" ||
+            leadRecord?.Shepherded_By === null ||
+            leadRecord?.Shepherded_By === undefined
+          ) {
+            await addAndUpdateLogs({
+              Name: leadRecord?.Last_Name || "Unknown",
+              Lead_ID: leadRecord?.id,
+              Mobile: leadRecord?.Mobile || "none",
+              RailLog_Owner: currentUser?.id || "Unknown",
+              Logs: [
+                {
+                  Agent: currentUser?.id || "Unknown",
+                  Rail_Stage: "3",
+                  Action: "Shepherded By Added",
+                  Timestamp: new Date().toISOString(),
+                  Data_Details: JSON.stringify({
+                    Shepherded_By: currentUser?.id || "Unknown",
+                  }),
+                },
+              ],
+            });
+          }
+        } catch (error) {
+          console.log(JSON.stringify(error));
         }
       }
       setLoading(false);

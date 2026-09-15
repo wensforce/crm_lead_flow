@@ -24,6 +24,28 @@ import Loader from "../Loader";
 import { toast } from "sonner";
 import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
+/** Zoho/ISO value → datetime-local input (YYYY-MM-DDTHH:mm). */
+const toDateTimeLocalValue = (value) => {
+  if (!value) return "";
+  const str = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(str)) return str;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return `${str}T00:00`;
+  const ms = Date.parse(str.replace(" ", "T"));
+  if (!Number.isFinite(ms)) return "";
+  const d = new Date(ms);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+/** datetime-local input → Zoho DateTime (yyyy-MM-ddTHH:mm:ss, local time). */
+const fromDateTimeLocalValue = (value) => {
+  if (!value) return "";
+  const str = String(value).trim();
+  const match = str.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/);
+  if (!match) return str;
+  return `${match[1]}T${match[2]}:${match[3]}:00`;
+};
+
 const W2PackageCard = ({
   onCatalogueConfirm = () => {},
   onCustomisePackage = () => {},
@@ -40,6 +62,8 @@ const W2PackageCard = ({
   const [templateError, setTemplateError] = useState("");
   const [loading, setLoading] = useState(false);
   const [serviceCity, setServiceCity] = useState("");
+  const [serviceStartDate, setServiceStartDate] = useState("");
+  const [serviceEndDate, setServiceEndDate] = useState("");
   const selectedPackage = packagesData.find(
     (pkg) => pkg.id === selectedPackageId,
   );
@@ -115,26 +139,30 @@ const W2PackageCard = ({
       await updateRecord("Leads", leadRecord?.id, {
         Package_Template_Sent: true,
       });
-      await addAndUpdateLogs({
-        Name: leadRecord?.Last_Name || "Unknown",
-        Lead_ID: leadRecord?.id,
-        Mobile: leadRecord?.Mobile || "none",
-        RailLog_Owner: currentUser?.id || "Unknown",
-        Logs: [
-          {
-            Agent: currentUser?.id || "Unknown",
-            Rail_Stage: "2",
-            Action: "Package Template Sent",
-            Timestamp: new Date().toISOString(),
-            Data_Details: JSON.stringify({
-              Package_Id: selectedPackageId,
-              Package_Template_Sent: true,
-              Package_Name: selectedPackage?.Title || "",
-              Package_Template: "lead_rail_system_package_v3",
-            }),
-          },
-        ],
-      });
+      try {
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "2",
+              Action: "Package Template Sent",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify({
+                Package_Id: selectedPackageId,
+                Package_Template_Sent: true,
+                Package_Name: selectedPackage?.Title || "",
+                Package_Template: "lead_rail_system_package_v3",
+              }),
+            },
+          ],
+        });
+      } catch (error) {
+        console.log(JSON.stringify(error));
+      }
       toast.success("Template sent successfully");
       onSendTemplate();
     } catch (error) {
@@ -154,11 +182,17 @@ const W2PackageCard = ({
       toast.error("Service city is required");
       return;
     }
+    if (!serviceStartDate) {
+      toast.error("Service start date & time is required");
+      return;
+    }
 
     try {
       setLoading(true);
       const payload = {
         Service_City: serviceCity.trim(),
+        Service_Start_Date_And_Time: fromDateTimeLocalValue(serviceStartDate),
+        Service_End_Date_And_Time: fromDateTimeLocalValue(serviceEndDate),
       };
 
       if (leadRecord?.Package_Id !== selectedPackageId) {
@@ -180,6 +214,8 @@ const W2PackageCard = ({
       }
       await updateRecord("Leads", leadRecord?.id, payload);
       await fetchLeadRecord(leadRecord?.id);
+      try {
+        
       await addAndUpdateLogs({
         Name: leadRecord?.Last_Name || "Unknown",
         Lead_ID: leadRecord?.id,
@@ -218,6 +254,9 @@ const W2PackageCard = ({
           ],
         });
       }
+    } catch (error) {
+        console.log(JSON.stringify(error));
+    }
       toast.success("Catalogue confirmed sent successfully");
       onCatalogueConfirm();
     } catch (error) {
@@ -236,6 +275,12 @@ const W2PackageCard = ({
     if (leadRecord) {
       setSelectedPackageId(leadRecord?.Package_Id || "");
       setServiceCity(leadRecord?.Service_City || "");
+      setServiceStartDate(
+        toDateTimeLocalValue(leadRecord?.Service_Start_Date_And_Time),
+      );
+      setServiceEndDate(
+        toDateTimeLocalValue(leadRecord?.Service_End_Date_And_Time),
+      );
     }
   }, [leadRecord]);
 
@@ -246,30 +291,39 @@ const W2PackageCard = ({
       toast.error("Service city is required");
       return;
     }
+    if (!serviceStartDate) {
+      toast.error("Service start date & time is required");
+      return;
+    }
 
     try {
       setLoading(true);
-      await updateRecord("Leads", leadRecord?.id, {
+      const payload = {
         Service_City: serviceCity.trim(),
-      });
+        Service_Start_Date_And_Time: fromDateTimeLocalValue(serviceStartDate),
+        Service_End_Date_And_Time: fromDateTimeLocalValue(serviceEndDate),
+      };
+      await updateRecord("Leads", leadRecord?.id, payload);
       await fetchLeadRecord(leadRecord?.id);
-      await addAndUpdateLogs({
-        Name: leadRecord?.Last_Name || "Unknown",
-        Lead_ID: leadRecord?.id,
-        Mobile: leadRecord?.Mobile || "none",
-        RailLog_Owner: currentUser?.id || "Unknown",
-        Logs: [
-          {
-            Agent: currentUser?.id || "Unknown",
-            Rail_Stage: "2",
-            Action: "Customise Package",
-            Timestamp: new Date().toISOString(),
-            Data_Details: JSON.stringify({
-              Service_City: serviceCity.trim(),
-            }),
-          },
-        ],
-      });
+      try {
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Rail_Stage: "2",
+              Action: "Customise Package",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify(payload),
+            },
+          ],
+        });
+      } catch (error) {
+        console.log(JSON.stringify(error));
+      }
       onSelectPackageForCustomization(selectedPackageId);
       onCustomisePackage();
     } catch (error) {
@@ -348,6 +402,42 @@ const W2PackageCard = ({
               className="ui-input h-12 text-sm"
               placeholder="Enter service city"
             />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2.5">
+              <label
+                htmlFor="w2-service-start-date"
+                className="text-sm font-medium text-foreground"
+              >
+                Service Start Date &amp; Time{" "}
+                <span className="text-destructive">*</span>
+              </label>
+              <input
+                id="w2-service-start-date"
+                type="datetime-local"
+                value={serviceStartDate}
+                onChange={(event) => setServiceStartDate(event.target.value)}
+                required
+                className="ui-input h-12 text-sm"
+              />
+            </div>
+
+            <div className="space-y-2.5">
+              <label
+                htmlFor="w2-service-end-date"
+                className="text-sm font-medium text-foreground"
+              >
+                Service End Date &amp; Time
+              </label>
+              <input
+                id="w2-service-end-date"
+                type="datetime-local"
+                value={serviceEndDate}
+                onChange={(event) => setServiceEndDate(event.target.value)}
+                className="ui-input h-12 text-sm"
+              />
+            </div>
           </div>
 
           <div className="space-y-2.5">

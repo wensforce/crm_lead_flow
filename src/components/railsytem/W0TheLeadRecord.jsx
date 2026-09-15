@@ -37,26 +37,33 @@ const W0TheLeadRecord = ({
     }
     if (selectedLanguage !== preferredLanguage) {
       try {
+        let log = "";
         setLoading(true);
-        const log = await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadId,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Rail_Log_Id: leadRecord?.Rail_Log_Id || "",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "0",
-              Action: "Lead Discovered",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
-                Preferred_Language: selectedLanguage,
-                Lead_Status: "Contacted",
-              }),
-            },
-          ],
-        });
+        try {
+          log = await addAndUpdateLogs({
+            Name: leadRecord?.Last_Name || "Unknown",
+            Lead_ID: leadId,
+            Mobile: leadRecord?.Mobile || "none",
+            RailLog_Owner: currentUser?.id || "Unknown",
+            Rail_Log_Id: leadRecord?.Rail_Log_Id || "",
+            Logs: [
+              {
+                Agent: currentUser?.id || "Unknown",
+                Rail_Stage: "0",
+                Action: "Lead Discovered",
+                Timestamp: new Date().toISOString(),
+                Data_Details: JSON.stringify({
+                  Preferred_Language: selectedLanguage,
+                  Lead_Status: "Contacted",
+                }),
+              },
+            ],
+          });
+        } catch (err) {
+          await updateRecord("Leads", leadId, {
+            Rail_Log_Id: "",
+          });
+        }
         await updateRecord("Leads", leadId, {
           Preferred_Language: selectedLanguage,
           Rail_Log_Id: leadRecord?.Rail_Log_Id || log?.id || "",
@@ -64,17 +71,9 @@ const W0TheLeadRecord = ({
           Rail_Stage: "0",
         });
         await fetchLeadRecord(leadId);
-
         setLoading(false);
       } catch (err) {
-        console.error(err);
-        await updateRecord("Leads", leadId, {
-          Rail_Log_Id: "",
-        });
-        await fetchLeadRecord(leadId);
-        toast.error(
-          "Failed to update preferred language in Zoho CRM. Please try again.",
-        );
+        console.log(JSON.stringify(err));
         setLoading(false);
         return;
       }
@@ -105,8 +104,8 @@ const W0TheLeadRecord = ({
         <div className="surface-card space-y-6 p-4 md:space-y-7 md:p-7">
           <header className="rounded-2xl bg-primary px-4 py-4 text-primary-foreground md:px-6">
             <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-              <h2 className="text-lg font-semibold tracking-tight md:text-xl">
-                Zoho CRM - Lead: {leadPhone}
+              <h2 className="text-lg font-semibold tracking-tight ">
+                Zoho CRM - Lead: <span >{leadRecord?.Last_Name || "Unknown"} - {leadPhone}</span>
               </h2>
             </div>
           </header>

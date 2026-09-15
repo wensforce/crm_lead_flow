@@ -173,21 +173,25 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
         toast.success("Package deck sent successfully");
         await updateRecord('Leads', leadRecord?.id, payload)
         await fetchLeadRecord(leadRecord?.id)
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "5.5",
-              Action: `${hasCustomizePackage ? "Customised Package" : "Package"} Deck Sent`,
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify(payload),
-            },
-          ],
-        })
+        try {
+          await addAndUpdateLogs({
+            Name: leadRecord?.Last_Name || "Unknown",
+            Lead_ID: leadRecord?.id,
+            Mobile: leadRecord?.Mobile || "none",
+            RailLog_Owner: currentUser?.id || "Unknown",
+            Logs: [
+              {
+                Agent: currentUser?.id || "Unknown",
+                Rail_Stage: "5.5",
+                Action: `${hasCustomizePackage ? "Customised Package" : "Package"} Deck Sent`,
+                Timestamp: new Date().toISOString(),
+                Data_Details: JSON.stringify(payload),
+              },
+            ],
+          })
+        } catch (error) {
+          console.log(JSON.stringify(error));
+        }
       })
       .catch((error) => {
         console.error('Error sending package deck template:', error)
@@ -213,6 +217,7 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
           Lead_Status: 'Deck Sent',
         })
         await fetchLeadRecord(leadRecord?.id)
+        try {
         await addAndUpdateLogs({
           Name: leadRecord?.Last_Name || "Unknown",
           Lead_ID: leadRecord?.id,
@@ -232,6 +237,9 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
             },
           ],
         })
+        } catch (error) {
+          console.log(JSON.stringify(error));
+        }
       }
 
       onContinue()

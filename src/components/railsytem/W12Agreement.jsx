@@ -174,39 +174,23 @@ const W12Agreement = ({
         file,
       });
 
+      let sentPayload = {
+        Rail_Stage: "13",
+        Lead_Status: "Agreement Sent",
+        Payment_Link: paymentLink,
+        Permanent_Agreement_Sent: true,
+      };
       try {
-        await updateRecord("Leads", leadRecord.id, {
-          Rail_Stage: "13",
-          Lead_Status: "Agreement Sent",
-          Payment_Link: paymentLink,
-          Permanent_Agreement_Sent: true,
-        });
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "13",
-              Action: "Permanent Agreement Sent",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
-                Rail_Stage: "13",
-                Lead_Status: "Agreement Sent",
-                Payment_Link: paymentLink,
-                Permanent_Agreement_Sent: true,
-              }),
-            },
-          ],
-        });
+        await updateRecord("Leads", leadRecord.id, sentPayload);
       } catch {
-        await updateRecord("Leads", leadRecord.id, {
+        sentPayload = {
           Rail_Stage: "13",
           Lead_Status: "Agreement Sent",
           Permanent_Agreement_Sent: true,
-        });
+        };
+        await updateRecord("Leads", leadRecord.id, sentPayload);
+      }
+      try {
         await addAndUpdateLogs({
           Name: leadRecord?.Last_Name || "Unknown",
           Lead_ID: leadRecord?.id,
@@ -218,14 +202,12 @@ const W12Agreement = ({
               Rail_Stage: "13",
               Action: "Permanent Agreement Sent",
               Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
-                Rail_Stage: "13",
-                Lead_Status: "Agreement Sent",
-                Permanent_Agreement_Sent: true,
-              }),
+              Data_Details: JSON.stringify(sentPayload),
             },
           ],
         });
+      } catch (error) {
+        console.log(JSON.stringify(error));
       }
       await fetchLeadRecord(leadRecord.id);
 
@@ -262,24 +244,28 @@ const W12Agreement = ({
       Lead_Status: "Permanent Agreement Sent",
     })
       .then(async () => {
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "13",
-              Action: "Permanent Bodyguard Agreement Sent Saved",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
+        try {
+          await addAndUpdateLogs({
+            Name: leadRecord?.Last_Name || "Unknown",
+            Lead_ID: leadRecord?.id,
+            Mobile: leadRecord?.Mobile || "none",
+            RailLog_Owner: currentUser?.id || "Unknown",
+            Logs: [
+              {
+                Agent: currentUser?.id || "Unknown",
                 Rail_Stage: "13",
-                Lead_Status: "Permanent Agreement Sent",
-              }),
-            },
-          ],
-        });
+                Action: "Permanent Bodyguard Agreement Sent Saved",
+                Timestamp: new Date().toISOString(),
+                Data_Details: JSON.stringify({
+                  Rail_Stage: "13",
+                  Lead_Status: "Permanent Agreement Sent",
+                }),
+              },
+            ],
+          });
+        } catch (error) {
+          console.log(JSON.stringify(error));
+        }
         onContinue();
       })
       .catch((error) => {

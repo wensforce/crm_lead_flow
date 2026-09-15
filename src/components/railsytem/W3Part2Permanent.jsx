@@ -237,23 +237,27 @@ const W3Part2Permanent = ({
         Permanent_Template_Sent: true,
       });
 
-      await addAndUpdateLogs({
-        Name: leadRecord?.Last_Name || "Unknown",
-        Lead_ID: leadRecord?.id,
-        Mobile: leadRecord?.Mobile || "none",
-        RailLog_Owner: currentUser?.id || "Unknown",
-        Logs: [
-          {
-            Agent: currentUser?.id || "Unknown",
-            Action: "Permanent Template Sent",
-            Timestamp: new Date().toISOString(),
-            Data_Details: JSON.stringify({
-              Permanent_Sent_Template: permanentSentTemplate,
-              Permanent_Template_Sent: true,
-            }),
-          },
-        ],
-      });
+      try {
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: leadRecord?.id,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
+              Action: "Permanent Template Sent",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify({
+                Permanent_Sent_Template: permanentSentTemplate,
+                Permanent_Template_Sent: true,
+              }),
+            },
+          ],
+        });
+      } catch (error) {
+        console.log(JSON.stringify(error));
+      }
       setLeadRecord(leadRecord => ({
         ...leadRecord,
         Permanent_Sent_Template: permanentSentTemplate.join(","),
@@ -297,23 +301,27 @@ const W3Part2Permanent = ({
       Lead_Status: "Permanent Template Sent",
     })
       .then(async () => {
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "3.5",
-              Action: "Permanent Template Sent Saved",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
+        try {
+          await addAndUpdateLogs({
+            Name: leadRecord?.Last_Name || "Unknown",
+            Lead_ID: leadRecord?.id,
+            Mobile: leadRecord?.Mobile || "none",
+            RailLog_Owner: currentUser?.id || "Unknown",
+            Logs: [
+              {
+                Agent: currentUser?.id || "Unknown",
                 Rail_Stage: "3.5",
-              }),
-            },
-          ],
-        });
+                Action: "Permanent Template Sent Saved",
+                Timestamp: new Date().toISOString(),
+                Data_Details: JSON.stringify({
+                  Rail_Stage: "3.5",
+                }),
+              },
+            ],
+          });
+        } catch (error) {
+          console.log(JSON.stringify(error));
+        }
         onContinue();
       })
       .catch((error) => {

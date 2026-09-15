@@ -1,9 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
-import { updateRecord } from "../../api/zohoCrm";
+import { toZohoDateTimeOffset, updateRecord } from "../../api/zohoCrm";
 import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
+import FollowUpActionModal from "../FollowUpActionModal";
 
-const LEAD_STATUS_OPTIONS = ["Junk", "Lost", "Nurturing", "Unreachable", "Job", "Marketing", "Vendor", "Follow Up Action"];
+const LEAD_STATUS_OPTIONS = [
+  "Junk",
+  "Lost",
+  "Nurturing",
+  "Unreachable",
+  "Job",
+  "Marketing",
+  "Vendor",
+  "Follow Up Action",
+];
 
 const NotASalesCall = ({ onBack = () => {} }) => {
   const { leadRecord, leadId, fetchLeadRecord, currentUser } = useZohoCrm();
@@ -15,6 +25,10 @@ const NotASalesCall = ({ onBack = () => {} }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [isClosed, setIsClosed] = useState(false);
+  const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
+  const [statusBeforeFollowUp, setStatusBeforeFollowUp] = useState("");
+  const [followUpAction, setFollowUpAction] = useState("");
+  const [followUpDate, setFollowUpDate] = useState("");
 
   useEffect(() => {
     if (!leadRecord) return;
@@ -38,11 +52,56 @@ const NotASalesCall = ({ onBack = () => {} }) => {
   const hasClosingRemark = closingRemark.trim().length > 0;
   const canClose = isDirty && hasClosingRemark;
 
+  const clearFollowUpSelection = () => {
+    setLeadStatus(
+      statusBeforeFollowUp === "Follow Up Action" ? "" : statusBeforeFollowUp,
+    );
+    setFollowUpAction("");
+    setFollowUpDate("");
+    setIsFollowUpModalOpen(false);
+  };
+
+  const handleLeadStatusChange = (event) => {
+    const nextStatus = event.target.value;
+
+    if (nextStatus === "Follow Up Action") {
+      setStatusBeforeFollowUp(
+        leadStatus === "Follow Up Action" ? "" : leadStatus,
+      );
+      setLeadStatus(nextStatus);
+      setIsFollowUpModalOpen(true);
+      return;
+    }
+
+    setLeadStatus(nextStatus);
+    setFollowUpAction("");
+    setFollowUpDate("");
+    setIsFollowUpModalOpen(false);
+  };
+
+  const handleFollowUpModalClose = () => {
+    clearFollowUpSelection();
+  };
+
+  const handleFollowUpModalConfirm = ({ action, followUpDate: nextDate }) => {
+    setFollowUpAction(action);
+    setFollowUpDate(nextDate);
+    setIsFollowUpModalOpen(false);
+  };
+
   const handleCloseLead = async () => {
     if (!isDirty) return;
 
     if (!closingRemark.trim()) {
       setSaveError("Closing Remark is required.");
+      return;
+    }
+
+    const isFollowUp = leadStatus === "Follow Up Action";
+    if (isFollowUp && (!followUpAction || !followUpDate)) {
+      setSaveError(
+        "Add the follow-up action and date and time before closing.",
+      );
       return;
     }
 
@@ -55,39 +114,52 @@ const NotASalesCall = ({ onBack = () => {} }) => {
     setSaveError("");
     setIsSaving(true);
 
+    const followUpFields = isFollowUp
+      ? {
+          Followed_Up_Marked: true,
+          Follow_Up_Date_Time: toZohoDateTimeOffset(followUpDate),
+          Follow_Up_Action: followUpAction,
+        }
+      : {};
+
     try {
       await updateRecord("Leads", recordId, {
         Lead_Status: leadStatus,
         Closing_Remark: closingRemark,
         Rail_Stage: "12",
+        ...followUpFields,
       });
       await fetchLeadRecord(recordId);
-      await addAndUpdateLogs({
-        Name: leadRecord?.Last_Name || "Unknown",
-        Lead_ID: recordId,
-        Mobile: leadRecord?.Mobile || "none",
-        RailLog_Owner: currentUser?.id || "Unknown",
-        Logs: [
-          {
-            Agent: currentUser?.id || "Unknown",
-            Rail_Stage: "12",
-            Action: "Lead Closed",
-            Timestamp: new Date().toISOString(),
-            Data_Details: JSON.stringify({
-              Lead_Status: leadStatus,
-              Closing_Remark: closingRemark,
+      try {
+        await addAndUpdateLogs({
+          Name: leadRecord?.Last_Name || "Unknown",
+          Lead_ID: recordId,
+          Mobile: leadRecord?.Mobile || "none",
+          RailLog_Owner: currentUser?.id || "Unknown",
+          Logs: [
+            {
+              Agent: currentUser?.id || "Unknown",
               Rail_Stage: "12",
-            }),
-          },
-        ],
-      });
+              Action: "Lead Closed",
+              Timestamp: new Date().toISOString(),
+              Data_Details: JSON.stringify({
+                Lead_Status: leadStatus,
+                Closing_Remark: closingRemark,
+                Rail_Stage: "12",
+                ...followUpFields,
+              }),
+            },
+          ],
+        });
+      } catch (error) {
+        console.log(JSON.stringify(error));
+      }
       setInitialLeadStatus(leadStatus);
       setInitialClosingRemark(closingRemark);
       setIsClosed(true);
     } catch (error) {
-      setSaveError(
-        error?.message || "Failed to close lead. Please try again.",
-      );
+      console.log(JSON.stringify(error));
+      setSaveError(error?.message || "Failed to close lead. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -120,6 +192,13 @@ const NotASalesCall = ({ onBack = () => {} }) => {
 
   return (
     <section className="mx-auto w-full max-w-6xl px-4 py-8 md:px-8 md:py-12">
+      <FollowUpActionModal
+        open={isFollowUpModalOpen}
+        action={followUpAction}
+        followUpDate={followUpDate}
+        onConfirm={handleFollowUpModalConfirm}
+        onCancel={handleFollowUpModalClose}
+      />
       <div className="mb-7 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
@@ -150,7 +229,7 @@ const NotASalesCall = ({ onBack = () => {} }) => {
           <select
             id="kd-status"
             value={leadStatus}
-            onChange={(event) => setLeadStatus(event.target.value)}
+            onChange={handleLeadStatusChange}
             className="ui-input h-12 text-sm"
           >
             <option value="" disabled>
@@ -165,6 +244,14 @@ const NotASalesCall = ({ onBack = () => {} }) => {
               <option value={leadStatus}>{leadStatus}</option>
             )}
           </select>
+          {leadStatus === "Follow Up Action" &&
+            followUpAction &&
+            followUpDate && (
+              <p className="text-sm text-muted-foreground">
+                Action: {followUpAction} · Follow-up:{" "}
+                {followUpDate.replace("T", " ")}
+              </p>
+            )}
         </div>
 
         <div className="space-y-2.5">

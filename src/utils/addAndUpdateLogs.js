@@ -42,6 +42,10 @@ export default async function addAndUpdateLogs(data) {
 
   const existing = await getRecord("RailLogs", existingId);
 
+  if (!existing) {
+    return insertRecord("RailLogs", { ...payload, Lead_Id: { id: leadId } });
+  }
+
   const existingLogRows = (existing?.Logs || []).map((row) => ({ id: row.id }));
   const incomingLogRows = payload.Logs || [];
 

@@ -43,25 +43,30 @@ const W1PitchLanguage = ({
     ) {
       try {
         setLoading(true);
-        const log = await addAndUpdateLogs({
-          Name: pitchData.callerName,
-          Lead_ID: leadId,
-          Rail_Log_Id: leadRecord?.Rail_Log_Id || "",
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "1",
-              Action: "Lead Contacted",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
-                Preferred_Language: pitchData.language,
-                Last_Name: pitchData.callerName,
-              }),
-            },
-          ],
-        });
+        let log = null;
+        try {
+          log = await addAndUpdateLogs({
+            Name: pitchData.callerName,
+            Lead_ID: leadId,
+            Rail_Log_Id: leadRecord?.Rail_Log_Id || "",
+            Mobile: leadRecord?.Mobile || "none",
+            RailLog_Owner: currentUser?.id || "Unknown",
+            Logs: [
+              {
+                Agent: currentUser?.id || "Unknown",
+                Rail_Stage: "1",
+                Action: "Lead Contacted",
+                Timestamp: new Date().toISOString(),
+                Data_Details: JSON.stringify({
+                  Preferred_Language: pitchData.language,
+                  Last_Name: pitchData.callerName,
+                }),
+              },
+            ],
+          });
+        } catch (error) {
+          console.log(JSON.stringify(error));
+        }
         await updateRecord("Leads", leadId, {
           Last_Name: pitchData.callerName,
           Rail_Stage: "1",
@@ -97,25 +102,30 @@ const W1PitchLanguage = ({
     ) {
       try {
         setLoading(true);
-        const log = await addAndUpdateLogs({
-          Name: pitchData.callerName,
-          Lead_ID: leadId,
-          Rail_Log_Id: leadRecord?.Rail_Log_Id || "",
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "1",
-              Action: "Lead Contacted",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
-                Preferred_Language: pitchData.language,
-                Last_Name: pitchData.callerName,
-              }),
-            },
-          ],
-        });
+        let log = null;
+        try {
+          log = await addAndUpdateLogs({
+            Name: pitchData.callerName,
+            Lead_ID: leadId,
+            Rail_Log_Id: leadRecord?.Rail_Log_Id || "",
+            Mobile: leadRecord?.Mobile || "none",
+            RailLog_Owner: currentUser?.id || "Unknown",
+            Logs: [
+              {
+                Agent: currentUser?.id || "Unknown",
+                Rail_Stage: "1",
+                Action: "Lead Contacted",
+                Timestamp: new Date().toISOString(),
+                Data_Details: JSON.stringify({
+                  Preferred_Language: pitchData.language,
+                  Last_Name: pitchData.callerName,
+                }),
+              },
+            ],
+          });
+        } catch (error) {
+          console.log(JSON.stringify(error));
+        }
         await updateRecord("Leads", leadId, {
           Last_Name: pitchData.callerName,
           Rail_Stage: "1",

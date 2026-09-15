@@ -332,6 +332,12 @@ const RailSystem = () => {
     }
   }, [leadRecord?.Rail_Stage]);
 
+  // Every screen change (step, back/next, forks) should land near the top —
+  // a small offset (40% of viewport height) instead of a hard jump to 0.
+  useEffect(() => {
+    window.scrollTo({ top: window.innerHeight * 0.4, behavior: "smooth" });
+  }, [activeStep]);
+
   if (!leadRecord) {
     return (
       <div className="flex items-center justify-center h-screen w-full bg-background">

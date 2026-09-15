@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import DecisionMakerModal from '../DecisionMakerModal'
+import FollowUpActionModal from '../FollowUpActionModal'
 import Loader from '../Loader'
 import { useZohoCrm } from '../../context/ZohoCrmContext'
-import { getRecord, updateRecord } from '../../api/zohoCrm'
+import { getRecord, toZohoDateTimeOffset, updateRecord } from '../../api/zohoCrm'
 import useSendDeckTemplate from '../../hooks/useSendDeckTemplate'
 import sendTemplateMessage from '../../api/sendTemplate'
 import { toast } from 'sonner'
@@ -38,6 +39,78 @@ const parsePrice = (value) => {
 }
 
 const parseAdditionalServices = parseAdditionalServicesString
+
+const parseServiceDate = (value) => {
+  if (value == null || value === '') return null
+  const ms = Date.parse(String(value).replace(' ', 'T'))
+  if (!Number.isFinite(ms)) return null
+  return new Date(ms)
+}
+
+const formatServiceDateLabel = (value) => {
+  const date = parseServiceDate(value)
+  if (!date) return ''
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+/** Inclusive calendar days from service dates; start-only counts as 1 day. */
+const deriveEstimationDaysFromLead = (lead) => {
+  const start = parseServiceDate(lead?.Service_Start_Date_And_Time)
+  if (!start) return 1
+
+  const end = parseServiceDate(lead?.Service_End_Date_And_Time)
+  if (!end) return 1
+
+  const startDay = new Date(start)
+  startDay.setHours(0, 0, 0, 0)
+  const endDay = new Date(end)
+  endDay.setHours(0, 0, 0, 0)
+  const diffDays = Math.round((endDay - startDay) / (1000 * 60 * 60 * 24))
+  return Math.max(1, diffDays + 1)
+}
+
+const formatZohoDateTime = (date) => {
+  const pad = (n) => String(n).padStart(2, '0')
+  const yyyy = date.getFullYear()
+  const MM = pad(date.getMonth() + 1)
+  const dd = pad(date.getDate())
+  const HH = pad(date.getHours())
+  const mm = pad(date.getMinutes())
+  const ss = pad(date.getSeconds())
+  return `${yyyy}-${MM}-${dd}T${HH}:${mm}:${ss}`
+}
+
+/** End datetime for inclusive day count: 4 days from 1 Aug → 4 Aug (keeps start time). */
+const computeServiceEndDateTime = (startValue, days) => {
+  const start = parseServiceDate(startValue)
+  if (!start) return null
+  const dayCount = Math.max(1, Number(days) || 1)
+  const end = new Date(start)
+  end.setDate(end.getDate() + dayCount - 1)
+  return formatZohoDateTime(end)
+}
+
+const serviceDurationHint = (lead, days) => {
+  const startLabel = formatServiceDateLabel(lead?.Service_Start_Date_And_Time)
+  if (!startLabel) return 'No service start date on lead — defaulting to 1 day'
+
+  const dayCount = Math.max(1, Number(days) || deriveEstimationDaysFromLead(lead))
+  const computedEnd = computeServiceEndDateTime(
+    lead?.Service_Start_Date_And_Time,
+    dayCount,
+  )
+  const endLabel =
+    formatServiceDateLabel(computedEnd) ||
+    formatServiceDateLabel(lead?.Service_End_Date_And_Time)
+
+  if (!endLabel) return `${startLabel} only — counted as 1 day`
+  const dayLabel = dayCount === 1 ? '1 day' : `${dayCount} days`
+  return `${startLabel} → ${endLabel} (${dayLabel})`
+}
 
 /** Any addon qty or add-on services entry → package uses editable margin range. */
 const hasPackageAddOns = (lead) => {
@@ -132,7 +205,10 @@ const W4Qualify = ({
   const [decisionMakerRole, setDecisionMakerRole] = useState('')
   const [decisionMakerOtherRole, setDecisionMakerOtherRole] = useState('')
   const [isCatalogConfirmedOnCall, setIsCatalogConfirmedOnCall] = useState(false)
-  const [timeline, setTimeline] = useState('Immediate (< 30 days)')
+  const [isFollowUpEnabled, setIsFollowUpEnabled] = useState(false)
+  const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false)
+  const [followUpAction, setFollowUpAction] = useState('')
+  const [followUpDate, setFollowUpDate] = useState('')
   const [purchasePotential, setPurchasePotential] = useState('High')
   const [bandMarkup, setBandMarkup] = useState(35)
   const [isSendingEstimate, setIsSendingEstimate] = useState(false)
@@ -144,6 +220,8 @@ const W4Qualify = ({
   const bookingFieldsInitializedRef = useRef(false)
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false)
   const [shouldSendEstimation, setShouldSendEstimation] = useState(true)
+  const [estimationDays, setEstimationDays] = useState(1)
+  const estimationDaysEditedRef = useRef(false)
 
   const isOpenPackageEstimation = useMemo(() => {
     const value = leadRecord?.Open_Package_Estimation
@@ -190,7 +268,17 @@ const W4Qualify = ({
   useEffect(() => {
     bookingFieldsInitializedRef.current = false
     setBookingMode('percent')
+    estimationDaysEditedRef.current = false
   }, [leadId])
+
+  useEffect(() => {
+    if (!leadRecord || estimationDaysEditedRef.current) return
+    setEstimationDays(deriveEstimationDaysFromLead(leadRecord))
+  }, [
+    leadRecord?.Service_Start_Date_And_Time,
+    leadRecord?.Service_End_Date_And_Time,
+    leadRecord,
+  ])
 
   useEffect(() => {
     if (!leadRecord) return
@@ -204,23 +292,15 @@ const W4Qualify = ({
     if (leadRecord.Custom_Decision_Maker) {
       setDecisionMakerOtherRole(leadRecord.Custom_Decision_Maker)
     }
-    if (leadRecord.Decision_Timeline) {
-      setTimeline(leadRecord.Decision_Timeline)
-    } else if (leadRecord.Service_Start_Date_And_Time) {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const start = new Date(leadRecord.Service_Start_Date_And_Time)
-      start.setHours(0, 0, 0, 0)
-      const diffDays = Math.round((start - today) / (1000 * 60 * 60 * 24))
-      if (diffDays < 30) {
-        setTimeline('Immediate (< 30 days)')
-      } else if (diffDays <= 90) {
-        setTimeline('30-90 days')
-      } else if (diffDays <= 180) {
-        setTimeline('Quarter planning')
-      } else {
-        setTimeline('Long-term evaluation')
-      }
+    if (leadRecord.Followed_Up_Marked != null) {
+      setIsFollowUpEnabled(toBooleanFlag(leadRecord.Followed_Up_Marked))
+    }
+    if (leadRecord.Follow_Up_Action) {
+      setFollowUpAction(leadRecord.Follow_Up_Action)
+    }
+    if (leadRecord.Follow_Up_Date_Time) {
+      // datetime-local inputs need "YYYY-MM-DDTHH:mm"; drop seconds/offset from the CRM value.
+      setFollowUpDate(String(leadRecord.Follow_Up_Date_Time).slice(0, 16))
     }
     if (leadRecord.Priority) {
       setPurchasePotential(leadRecord.Priority)
@@ -282,21 +362,25 @@ const W4Qualify = ({
       try {
         await updateRecord('Leads', leadRecord?.id, payload)
         await fetchLeadRecord(leadRecord?.id)
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "12",
-              Action: "No Decision Maker",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify(payload),
-            },
-          ],
-        })
+        try {
+          await addAndUpdateLogs({
+            Name: leadRecord?.Last_Name || "Unknown",
+            Lead_ID: leadRecord?.id,
+            Mobile: leadRecord?.Mobile || "none",
+            RailLog_Owner: currentUser?.id || "Unknown",
+            Logs: [
+              {
+                Agent: currentUser?.id || "Unknown",
+                Rail_Stage: "12",
+                Action: "No Decision Maker",
+                Timestamp: new Date().toISOString(),
+                Data_Details: JSON.stringify(payload),
+              },
+            ],
+          })
+        } catch (error) {
+          console.log(JSON.stringify(error))
+        }
         onDecisionMakerModalContinue()
         toast.success('Lead updated successfully!')
       } catch (error) {
@@ -310,21 +394,40 @@ const W4Qualify = ({
     setIsDecisionMakerModalOpen(false)
   }
 
-  const formatZohoDateTime = (date) => {
-    // Zoho format: "yyyy-MM-ddTHH:mm:ss" — local time, no ms, no timezone suffix
-    const pad = (n) => String(n).padStart(2, "0");
-  
-    const yyyy = date.getFullYear();
-    const MM   = pad(date.getMonth() + 1);
-    const dd   = pad(date.getDate());
-    const HH   = pad(date.getHours());       // local hours, not UTC
-    const mm   = pad(date.getMinutes());
-    const ss   = pad(date.getSeconds());
-  
-    return `${yyyy}-${MM}-${dd}T${HH}:${mm}:${ss}`;
-  };
+  const handleFollowUpToggle = (nextValue) => {
+    if (nextValue) {
+      setIsFollowUpModalOpen(true)
+      return
+    }
+
+    setIsFollowUpEnabled(false)
+    setFollowUpAction('')
+    setFollowUpDate('')
+    setIsFollowUpModalOpen(false)
+  }
+
+  const handleFollowUpModalClose = () => {
+    // Cancelling without a saved action/date leaves the toggle off.
+    if (!followUpAction || !followUpDate) {
+      setIsFollowUpEnabled(false)
+    }
+    setIsFollowUpModalOpen(false)
+  }
+
+  const handleFollowUpModalConfirm = ({ action, followUpDate: nextDate }) => {
+    setFollowUpAction(action)
+    setFollowUpDate(nextDate)
+    setIsFollowUpEnabled(true)
+    setIsFollowUpModalOpen(false)
+  }
 
   const buildLeadUpdatePayload = () => {
+    const resolvedEstimationDays = Math.max(1, Number(estimationDays) || 1)
+    const serviceEndDateTime = computeServiceEndDateTime(
+      leadRecord?.Service_Start_Date_And_Time,
+      resolvedEstimationDays,
+    )
+
     let payload = {
       Decision_Maker: isDecisionMakerOnCall,
       Decision_Maker_Type: isDecisionMakerOnCall ? decisionMakerRole : '',
@@ -332,14 +435,21 @@ const W4Qualify = ({
         isDecisionMakerOnCall && decisionMakerRole === 'Others'
           ? decisionMakerOtherRole
           : '',
-      Decision_Timeline: timeline,
+      Followed_Up_Marked: isFollowUpEnabled,
+      ...(isFollowUpEnabled && followUpAction && followUpDate
+        ? {
+            Followed_Up_Marked: true,
+            Follow_Up_Action: followUpAction,
+            Follow_Up_Date_Time: toZohoDateTimeOffset(followUpDate),
+          }
+        : {}),
       Priority: purchasePotential,
       Customer_confirmed_deck: JSON.stringify(isCatalogConfirmedOnCall),
       Estimate_Deadline_At: formatZohoDateTime(new Date(Date.now() + 15 * 60 * 1000)),
       Estimation_Approval_Send: currentUser?.role?.name?.trim()?.toLowerCase() === 'sales executive' ? true : false,
       Estimate_DeadlineAt: currentUser?.role?.name?.trim()?.toLowerCase() === 'sales executive' ? formatZohoDateTime(new Date(Date.now() + 15 * 60 * 1000)) : '',
       Estimation_Sent_At: formatZohoDateTime(new Date()),
-      Estimation_Range_Start: pricingSummary.startPrice,
+      Estimation_Range_Start: budgetBand.rawStart,
       Estimation_Range_End:  packageUsesRange || guidedPricing.hasGuidedPricing ? budgetBand.rawEnd : 0,
       Estimation_Percentage: crmBookingPercentage,
       Approval_Manager_Estimation: currentUser.id,
@@ -348,6 +458,9 @@ const W4Qualify = ({
       Lead_Status: "Agent Sent Estimate",
     }
 
+    if (serviceEndDateTime) {
+      payload.Service_End_Date_And_Time = serviceEndDateTime
+    }
 
     if (isOpenPackageEstimation) {
       payload = {
@@ -372,9 +485,15 @@ const W4Qualify = ({
       toast.error('Please enter a custom decision maker')
       return false
     }
+    if (!isFollowUpEnabled || !followUpAction || !followUpDate) {
+      toast.error('Please schedule the next follow-up before continuing')
+      return false
+    }
 
     return true
   }
+
+  const isFollowUpMissing = !isFollowUpEnabled || !followUpAction || !followUpDate
 
   const handleOpenConfirmModal = () => {
     if (!validateBeforeContinue()) return
@@ -449,21 +568,25 @@ const W4Qualify = ({
           ...payload,
         })
         await fetchLeadRecord(leadRecord?.id)
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "6",
-              Action: "Estimation Sent Saved",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify(payload),
-            },
-          ],
-        })
+        try {
+          await addAndUpdateLogs({
+            Name: leadRecord?.Last_Name || "Unknown",
+            Lead_ID: leadRecord?.id,
+            Mobile: leadRecord?.Mobile || "none",
+            RailLog_Owner: currentUser?.id || "Unknown",
+            Logs: [
+              {
+                Agent: currentUser?.id || "Unknown",
+                Rail_Stage: "6",
+                Action: "Estimation Sent Saved",
+                Timestamp: new Date().toISOString(),
+                Data_Details: JSON.stringify(payload),
+              },
+            ],
+          })
+        } catch (error) {
+          console.log(JSON.stringify(error))
+        }
       }
 
       setIsConfirmModalOpen(false)
@@ -700,8 +823,11 @@ const W4Qualify = ({
     leadRecord,
   ])
 
+  const dailyStartPrice = pricingSummary.startPrice
+  const effectiveEstimationDays = Math.max(1, Number(estimationDays) || 1)
+
   const budgetBand = useMemo(() => {
-    const start = pricingSummary.startPrice
+    const start = Math.round(dailyStartPrice * effectiveEstimationDays)
     const markup =
       packageIsFixedRate ? 0 : Math.max(0, Number(bandMarkup) || 0)
     const end = Math.round(start * (1 + markup / 100))
@@ -711,6 +837,8 @@ const W4Qualify = ({
       end: fmt(end),
       rawStart: start,
       rawEnd: end,
+      dailyStartPrice,
+      estimationDays: effectiveEstimationDays,
       sourceLabel: pricingSummary.label,
       isFixedRate: packageIsFixedRate,
       usesRange: !packageIsFixedRate,
@@ -720,7 +848,8 @@ const W4Qualify = ({
     }
   }, [
     bandMarkup,
-    pricingSummary.startPrice,
+    dailyStartPrice,
+    effectiveEstimationDays,
     pricingSummary.label,
     packageIsFixedRate,
   ])
@@ -767,6 +896,13 @@ const W4Qualify = ({
         open={isDecisionMakerModalOpen}
         onContinue={handleDecisionMakerModalContinue}
         onCancel={handleDecisionMakerModalCancel}
+      />
+      <FollowUpActionModal
+        open={isFollowUpModalOpen}
+        action={followUpAction}
+        followUpDate={followUpDate}
+        onConfirm={handleFollowUpModalConfirm}
+        onCancel={handleFollowUpModalClose}
       />
 
       {isConfirmModalOpen && (
@@ -962,21 +1098,35 @@ const W4Qualify = ({
             )}
           </div>
 
-          <div className="space-y-2.5">
-            <label htmlFor="w4-timeline" className="text-sm font-medium text-foreground">
-              [4] Timeline
-            </label>
-            <select
-              id="w4-timeline"
-              value={timeline}
-              onChange={(event) => setTimeline(event.target.value)}
-              className="ui-input h-12 text-sm"
-            >
-              <option>Immediate (&lt; 30 days)</option>
-              <option>30-90 days</option>
-              <option>Quarter planning</option>
-              <option>Long-term evaluation</option>
-            </select>
+          <div className="space-y-3 rounded-xl border border-border bg-card p-4 md:px-5">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-medium text-card-foreground">
+                  [4] Schedule next follow-up? <span className="text-destructive">*</span>
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Required — set the next action and follow-up date and time before continuing.
+                </p>
+              </div>
+              <ToggleOption value={isFollowUpEnabled} onChange={handleFollowUpToggle} />
+            </div>
+
+            {isFollowUpEnabled && followUpAction && followUpDate && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3.5 py-2.5">
+                <p className="text-sm text-muted-foreground">
+                  Action: <span className="font-semibold text-foreground">{followUpAction}</span>
+                  {' · '}Follow-up:{' '}
+                  <span className="font-semibold text-foreground">{followUpDate.replace('T', ' ')}</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsFollowUpModalOpen(true)}
+                  className="text-sm font-semibold text-primary hover:underline"
+                >
+                  Change
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2.5">
@@ -1066,8 +1216,40 @@ const W4Qualify = ({
 
             <p className="mt-1.5 text-xs text-gray-400">
               {budgetBand.isFixedRate
-                ? 'Fixed package price — no range (no additional services requested)'
-                : `start = sum of products + auxiliary pricing · end = start + ${bandMarkup}%`}
+                ? 'Per-day total × service days — fixed package (no margin range)'
+                : `Per-day total × service days · end = total + ${bandMarkup}%`}
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <label
+                htmlFor="w4-estimation-days"
+                className="text-sm font-medium text-gray-600 whitespace-nowrap"
+              >
+                Service days
+              </label>
+              <input
+                id="w4-estimation-days"
+                type="number"
+                min="1"
+                max="365"
+                step="1"
+                value={estimationDays}
+                onChange={(e) => {
+                  estimationDaysEditedRef.current = true
+                  const raw = e.target.value
+                  if (raw === '') {
+                    setEstimationDays('')
+                    return
+                  }
+                  setEstimationDays(Math.max(1, Math.floor(Number(raw) || 1)))
+                }}
+                className="w-24 rounded-lg border border-gray-300 bg-white px-3 py-2 text-base font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
+              />
+              <span className="text-sm text-gray-500">
+                Per day: Rs. {dailyStartPrice.toLocaleString('en-IN')}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-gray-400">
+              {serviceDurationHint(leadRecord, effectiveEstimationDays)}
             </p>
             {budgetBand.usesRange && (
               <div className="mt-4 flex items-center gap-3">
@@ -1198,11 +1380,17 @@ const W4Qualify = ({
             <p className="text-sm font-medium text-red-600">{continueError}</p>
           )}
 
+          {isFollowUpMissing && (
+            <p className="text-sm font-medium text-amber-700">
+              Schedule the next follow-up (item [4] above) before continuing.
+            </p>
+          )}
+
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               type="button"
               onClick={handleOpenConfirmModal}
-              disabled={loading || isSendingEstimate || !pricingSummary.hasPriceSource || !isCatalogConfirmedOnCall || cantReUpdateLeadRecord}
+              disabled={loading || isSendingEstimate || !pricingSummary.hasPriceSource || !isCatalogConfirmedOnCall || cantReUpdateLeadRecord || isFollowUpMissing}
               className="btn-primary min-h-12 min-w-56 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading || isSendingEstimate ? (
@@ -1217,7 +1405,12 @@ const W4Qualify = ({
             {
               cantReUpdateLeadRecord && (
                 // redirect next screen without updating the lead record
-                <button type='button' onClick={onSendEstimate} className='btn-secondary min-h-12 min-w-28'> Next </button>
+                <button
+                  type='button'
+                  onClick={onSendEstimate}
+                  disabled={isFollowUpMissing}
+                  className='btn-secondary min-h-12 min-w-28 disabled:cursor-not-allowed disabled:opacity-60'
+                > Next </button>
               )
             }
             <button type="button" onClick={onAdjustItems} disabled={loading} className="btn-secondary min-h-12 min-w-56">
