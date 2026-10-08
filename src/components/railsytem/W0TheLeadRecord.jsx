@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
-import { updateRecord } from "../../api/zohoCrm";
-import Loader from "../Loader";
+import Loader from "../ui/Loader";
 import { toast } from "sonner";
-import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
+import useSaveLead from "../../hooks/useSaveLead";
 
 const W0TheLeadRecord = ({
   onStartDiscovery = () => {},
@@ -18,6 +17,8 @@ const W0TheLeadRecord = ({
   const preferredLanguage = leadRecord?.Preferred_Language || "None";
   const [loading, setLoading] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("None");
+
+  const saveLead = useSaveLead();
 
   useEffect(() => {
     if (!leadRecord) return;
@@ -37,45 +38,28 @@ const W0TheLeadRecord = ({
     }
     if (selectedLanguage !== preferredLanguage) {
       try {
-        let log = "";
         setLoading(true);
-        try {
-          log = await addAndUpdateLogs({
-            Name: leadRecord?.Last_Name || "Unknown",
-            Lead_ID: leadId,
-            Mobile: leadRecord?.Mobile || "none",
-            RailLog_Owner: currentUser?.id || "Unknown",
-            Rail_Log_Id: leadRecord?.Rail_Log_Id || "",
-            Logs: [
-              {
-                Agent: currentUser?.id || "Unknown",
-                Rail_Stage: "0",
-                Action: "Lead Discovered",
-                Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify({
-                  Preferred_Language: selectedLanguage,
-                  Lead_Status: "Contacted",
-                }),
-              },
-            ],
-          });
-        } catch (err) {
-          await updateRecord("Leads", leadId, {
-            Rail_Log_Id: "",
-          });
-        }
-        await updateRecord("Leads", leadId, {
-          Preferred_Language: selectedLanguage,
-          Rail_Log_Id: leadRecord?.Rail_Log_Id || log?.id || "",
-          Lead_Status: "Contacted",
-          Rail_Stage: "0",
+        await saveLead({
+          fields: {
+            Preferred_Language: selectedLanguage,
+            Lead_Status: "Contacted",
+            Rail_Stage: "0",
+          },
+          log: {
+            stage: "0",
+            action: "Lead Discovered",
+            details: {
+              Preferred_Language: selectedLanguage,
+              Lead_Status: "Contacted",
+            },
+          },
+          sync: "local",
         });
-        await fetchLeadRecord(leadId);
-        setLoading(false);
       } catch (err) {
-        console.log(JSON.stringify(err));
-        setLoading(false);
+        toast.error(err.message || "Error saving lead. Please try again.");
         return;
+      } finally {
+        setLoading(false);
       }
     }
     onStartDiscovery();
@@ -105,7 +89,10 @@ const W0TheLeadRecord = ({
           <header className="rounded-2xl bg-primary px-4 py-4 text-primary-foreground md:px-6">
             <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
               <h2 className="text-lg font-semibold tracking-tight ">
-                Zoho CRM - Lead: <span >{leadRecord?.Last_Name || "Unknown"} - {leadPhone}</span>
+                Zoho CRM - Lead:{" "}
+                <span>
+                  {leadRecord?.Last_Name || "Unknown"} - {leadPhone}
+                </span>
               </h2>
             </div>
           </header>
@@ -163,6 +150,7 @@ const W0TheLeadRecord = ({
             <button
               type="button"
               onClick={handleStartDiscovery}
+              disabled={loading}
               className="btn-primary min-h-12 min-w-44"
             >
               Start Discovery Call
@@ -177,9 +165,10 @@ const W0TheLeadRecord = ({
             <button
               type="button"
               onClick={onExitDisposition}
+              disabled={loading}
               className="min-h-12 min-w-40 rounded-md border border-destructive/45 bg-background px-4 py-2.5 font-medium text-destructive transition hover:bg-destructive/10"
             >
-              Exit / Disposition (KD)
+              Exit / Disposition
             </button>
           </div>
         </div>

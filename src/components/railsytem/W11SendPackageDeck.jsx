@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { getRecord, updateRecord } from '../../api/zohoCrm'
 import { useZohoCrm } from '../../context/ZohoCrmContext'
 import useSendDeckTemplate from '../../hooks/useSendDeckTemplate'
-import Loader from '../Loader'
+import Loader from '../ui/Loader'
 import { toast } from 'sonner'
 import addAndUpdateLogs from '../../utils/addAndUpdateLogs'
 
@@ -185,7 +185,7 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
                 Rail_Stage: "5.5",
                 Action: `${hasCustomizePackage ? "Customised Package" : "Package"} Deck Sent`,
                 Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify(payload),
+                Data_Details2: JSON.stringify(payload),
               },
             ],
           })
@@ -229,7 +229,7 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
               Rail_Stage: "5.5",
               Action: "Customised Package Deck Sent Saved",
               Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
+              Data_Details2: JSON.stringify({
                 Rail_Stage: '5.5',
                 Open_Package_Estimation: true,
                 Lead_Status: 'Deck Sent',

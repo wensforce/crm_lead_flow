@@ -27,7 +27,7 @@ export function getFields(entity) {
 export function getRecord(entity, recordId) {
   return window.ZOHO.CRM.API.getRecord({ Entity: entity, RecordID: recordId })
     .then(unwrap)
-    .then((data) => data[0]) // return just the record, not the array
+    .then((data) => (data.length > 0 ? data[0] : null))
     .catch((err) => {
       alert(JSON.stringify(err.message));
       return null;
@@ -155,7 +155,8 @@ function formatDateTimeWithOffset(date) {
 
 function toZohoDateTime(value, dateOnlyHour = 9) {
   const text = String(value || "").trim();
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(text)) return text.slice(0, 19);
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(text))
+    return text.slice(0, 19);
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(text)) return `${text}:00`;
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
     return `${text}T${pad2(dateOnlyHour)}:00:00`;
@@ -319,9 +320,7 @@ export function createMeeting({
     // v2 Events wants an absolute datetime; newer builds want an offset array.
     [
       remindAtDate ? formatDateTimeWithOffset(remindAtDate) : null,
-      reminderMinutes
-        ? [{ unit: reminderMinutes, period: "minutes" }]
-        : null,
+      reminderMinutes ? [{ unit: reminderMinutes, period: "minutes" }] : null,
     ],
   );
 }
@@ -339,5 +338,4 @@ export async function connectToCustomer(leadId) {
   return window.ZOHO.CRM.FUNCTIONS.execute(func_name, req_data).then((data) => {
     return data;
   });
-
 }

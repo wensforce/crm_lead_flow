@@ -47,7 +47,7 @@ export const ZohoCrmProvider = ({ children }) => {
 
     const handlePageLoad = (data) => {
       const nextEntity = data?.Entity || "Leads";
-      const nextLeadId = data?.EntityId?.[0] || data?.data?.lead_id; 
+      const nextLeadId = data?.EntityId?.[0] || data?.data?.lead_id;
       setEntity(nextEntity);
       setLeadId(nextLeadId);
 

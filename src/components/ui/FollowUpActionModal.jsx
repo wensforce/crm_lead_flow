@@ -6,8 +6,8 @@ import {
   MEETING_VENUE_OPTIONS,
   TASK_PRIORITY_OPTIONS,
   TASK_REMINDER_LEAD_MINUTES,
-} from "../api/zohoCrm";
-import { useZohoCrm } from "../context/ZohoCrmContext";
+} from "../../api/zohoCrm";
+import { useZohoCrm } from "../../context/ZohoCrmContext";
 
 const ACTION_OPTIONS = ["Call", "Task", "Meeting"];
 const MEETING_DURATION_MS = 60 * 60 * 1000;

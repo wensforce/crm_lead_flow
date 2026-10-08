@@ -18,9 +18,9 @@ import W11SendPackageDeck from "../components/railsytem/W11SendPackageDeck";
 import W12Agreement from "../components/railsytem/W12Agreement";
 import W99LastScreen from "../components/railsytem/W99LastScreen";
 import NotASalesCall from "../components/railsytem/NotASalesCall";
-import JournyProgress from "../components/JournyProgress";
-import OpenCanvas from "../components/OpenCanvas";
-import Loader from "../components/Loader";
+import JournyProgress from "../components/ui/JournyProgress";
+import OpenCanvas from "../components/ui/OpenCanvas";
+import Loader from "../components/ui/Loader";
 import { connectToCustomer } from "../api/zohoCrm";
 import { toast } from "sonner";
 

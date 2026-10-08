@@ -5,7 +5,7 @@ import { attachFile, updateRecord } from "../../api/zohoCrm";
 import { sendAgreementTemplate } from "../../api/sendTemplate";
 import { getAgreementPdfFile } from "../../services/PdfGenerator";
 import AgreementTextEditor from "./AgreementTextEditor";
-import Loader from "../Loader";
+import Loader from "../ui/Loader";
 import { toast } from "sonner";
 import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
@@ -72,7 +72,7 @@ const W12Agreement = ({
   //             Rail_Stage: "13",
   //             Action: "Entered Agreement Stage",
   //             Timestamp: new Date().toISOString(),
-  //             Data_Details: JSON.stringify({
+  //             Data_Details2: JSON.stringify({
   //               Rail_Stage: "13",
   //             }),
   //           },
@@ -97,6 +97,7 @@ const W12Agreement = ({
       customerName: leadRecord?.Last_Name || "",
       customerPhone: leadRecord?.Mobile || "",
       directAmount: String(agreementFeeAmount),
+      finalAmount: String(agreementFeeAmount),
     });
     return `https://subscription.wensforce.com/rail-payment?${params.toString()}`;
   }, [agreementFeeAmount, leadRecord?.Last_Name, leadRecord?.Mobile]);
@@ -202,7 +203,7 @@ const W12Agreement = ({
               Rail_Stage: "13",
               Action: "Permanent Agreement Sent",
               Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify(sentPayload),
+              Data_Details2: JSON.stringify(sentPayload),
             },
           ],
         });
@@ -256,7 +257,7 @@ const W12Agreement = ({
                 Rail_Stage: "13",
                 Action: "Permanent Bodyguard Agreement Sent Saved",
                 Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify({
+                Data_Details2: JSON.stringify({
                   Rail_Stage: "13",
                   Lead_Status: "Permanent Agreement Sent",
                 }),

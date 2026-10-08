@@ -12,7 +12,7 @@ import {
   serializeAdditionalServicesString,
 } from '../../utils/addonServices'
 import { toast } from 'sonner'
-import Loader from '../Loader'
+import Loader from '../ui/Loader'
 import addAndUpdateLogs from '../../utils/addAndUpdateLogs'
 
 const parseAmount = (value) => {
@@ -117,7 +117,7 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
               Rail_Stage: "5",
               Action: "Addon Services Saved",
               Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
+              Data_Details2: JSON.stringify({
                 Addon_Service: serialized,
                 Additional_Services: serializeAdditionalServicesString(editableAddonServices),
               }),
@@ -159,7 +159,7 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
                 Rail_Stage: "5",
                 Action: "Catalog Sent",
                 Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify({
+                Data_Details2: JSON.stringify({
                   Catalog_Sent: true,
                 }),
               },
@@ -219,7 +219,7 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
                 Rail_Stage: "5",
                 Action: "Deck Sent Saved",
                 Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify({
+                Data_Details2: JSON.stringify({
                   Rail_Stage: '5',
                   Open_Package_Estimation: false,
                   Lead_Status: 'Deck Sent',

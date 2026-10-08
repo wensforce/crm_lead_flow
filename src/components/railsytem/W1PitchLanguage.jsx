@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
-import { updateRecord } from "../../api/zohoCrm";
-import Loader from "../Loader";
+import Loader from "../ui/Loader";
 import { toast } from "sonner";
-import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
+import useSaveLead from "../../hooks/useSaveLead";
 
 const W1PitchLanguage = ({
   onPackageNamed = () => {},
@@ -20,6 +19,55 @@ const W1PitchLanguage = ({
   });
   const [loading, setLoading] = useState(false);
 
+  const saveLead = useSaveLead();
+
+  const handleContinue = async (onContinue) => {
+    if (pitchData.language === "None") {
+      toast.error("Please select a preferred language before proceeding.");
+      return;
+    }
+    if (pitchData.callerName.trim() === "") {
+      toast.error("Please enter the caller name before proceeding.");
+      return;
+    }
+
+    const changed =
+      pitchData.callerName !== leadRecord?.Last_Name ||
+      pitchData.language !== leadRecord?.Preferred_Language;
+
+    if (changed) {
+      setLoading(true);
+      try {
+        await saveLead({
+          fields: {
+            Last_Name: pitchData.callerName,
+            Rail_Stage: "1",
+            Preferred_Language: pitchData.language,
+          },
+          log: {
+            stage: "1",
+            action: "Lead Contacted",
+            details: {
+              Preferred_Language: pitchData.language,
+              Last_Name: pitchData.callerName,
+            },
+          },
+          sync: "local",
+        });
+        toast.success(
+          "Caller name and preferred language updated successfully.",
+        );
+      } catch (err) {
+        toast.error(err.message || "Error saving lead. Please try again.");
+        return;
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    onContinue();
+  };
+
   useEffect(() => {
     if (!leadRecord) return;
     setPitchData({
@@ -27,125 +75,6 @@ const W1PitchLanguage = ({
       language: leadRecord?.Preferred_Language || "None",
     });
   }, [leadRecord]);
-
-  const handleOnPackageNamed = async () => {
-    if (pitchData.language === "None") {
-      toast.error("Please select a preferred language before proceeding.");
-      return;
-    }
-    if (pitchData.callerName.trim() === "") {
-      toast.error("Please enter the caller name before proceeding.");
-      return;
-    }
-    if (
-      pitchData.callerName !== leadRecord?.Last_Name ||
-      pitchData.language !== leadRecord?.Preferred_Language
-    ) {
-      try {
-        setLoading(true);
-        let log = null;
-        try {
-          log = await addAndUpdateLogs({
-            Name: pitchData.callerName,
-            Lead_ID: leadId,
-            Rail_Log_Id: leadRecord?.Rail_Log_Id || "",
-            Mobile: leadRecord?.Mobile || "none",
-            RailLog_Owner: currentUser?.id || "Unknown",
-            Logs: [
-              {
-                Agent: currentUser?.id || "Unknown",
-                Rail_Stage: "1",
-                Action: "Lead Contacted",
-                Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify({
-                  Preferred_Language: pitchData.language,
-                  Last_Name: pitchData.callerName,
-                }),
-              },
-            ],
-          });
-        } catch (error) {
-          console.log(JSON.stringify(error));
-        }
-        await updateRecord("Leads", leadId, {
-          Last_Name: pitchData.callerName,
-          Rail_Stage: "1",
-          Rail_Log_Id: leadRecord?.Rail_Log_Id || log?.id || "",
-          Preferred_Language: pitchData.language,
-        });
-        await fetchLeadRecord(leadId);
-        toast.success("Caller name and preferred language updated successfully.");
-        onPackageNamed(); 
-      } catch (err) {
-        toast.error("Failed to update caller name in Zoho CRM. Please try again.");
-        return;
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      onPackageNamed();
-    }
-  };
-
-  const handleOnGuideCustomer = async () => {
-    if (pitchData.language === "None") {
-      toast.error("Please select a preferred language before proceeding.");
-      return;
-    }
-    if (pitchData.callerName.trim() === "") {
-      toast.error("Please enter the caller name before proceeding.");
-      return;
-    }
-    if (
-      pitchData.callerName !== leadRecord?.Last_Name ||
-      pitchData.language !== leadRecord?.Preferred_Language
-    ) {
-      try {
-        setLoading(true);
-        let log = null;
-        try {
-          log = await addAndUpdateLogs({
-            Name: pitchData.callerName,
-            Lead_ID: leadId,
-            Rail_Log_Id: leadRecord?.Rail_Log_Id || "",
-            Mobile: leadRecord?.Mobile || "none",
-            RailLog_Owner: currentUser?.id || "Unknown",
-            Logs: [
-              {
-                Agent: currentUser?.id || "Unknown",
-                Rail_Stage: "1",
-                Action: "Lead Contacted",
-                Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify({
-                  Preferred_Language: pitchData.language,
-                  Last_Name: pitchData.callerName,
-                }),
-              },
-            ],
-          });
-        } catch (error) {
-          console.log(JSON.stringify(error));
-        }
-        await updateRecord("Leads", leadId, {
-          Last_Name: pitchData.callerName,
-          Rail_Stage: "1",
-          Rail_Log_Id: leadRecord?.Rail_Log_Id || log?.id || "",
-          Preferred_Language: pitchData.language,
-        });
-        await fetchLeadRecord(leadId);
-     
-        toast.success("Caller name and preferred language updated successfully.");
-        onGuideCustomer();
-      } catch (err) {
-        toast.error("Failed to update caller name in Zoho CRM. Please try again.");
-        return;
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      onGuideCustomer();
-    }
-  }
 
   return (
     <>
@@ -232,14 +161,14 @@ const W1PitchLanguage = ({
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               type="button"
-              onClick={handleOnPackageNamed}
+              onClick={() => handleContinue(onPackageNamed)}
               className="btn-primary min-h-12 min-w-52"
             >
               Customer named a package
             </button>
             <button
               type="button"
-              onClick={handleOnGuideCustomer}
+              onClick={() => handleContinue(onGuideCustomer)}
               className="btn-secondary min-h-12 min-w-52"
             >
               Guide the customer
@@ -259,7 +188,6 @@ const W1PitchLanguage = ({
               Back to W0
             </button>
           </div>
-
         </div>
       </section>
     </>

@@ -15,7 +15,7 @@ import { getRecord, updateRecord } from "../../api/zohoCrm";
 import { sendPackageTemplate } from "../../api/sendTemplate";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { ADDON_PRICES } from "../../config/pricing";
-import Loader from "../Loader";
+import Loader from "../ui/Loader";
 import AddOnServicesPicker from "./AddOnServicesPicker";
 import {
   addonServicesTotal,
@@ -203,7 +203,7 @@ const W2Part2PackageCustomize = ({
               Rail_Stage: "2.5",
               Action: "Customised Package Sent Template",
               Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
+              Data_Details2: JSON.stringify({
                 Customised_Package_Sent_Template: true,
               }),
             },
@@ -244,6 +244,7 @@ const W2Part2PackageCustomize = ({
           serializeAdditionalServicesString(selectedServices),
         Addon_Service: serializeAddonServicesForCrm(selectedServices),
         Service_City: serviceCity.trim(),
+        Customized_Package: true,
         Rail_Stage: "2.5",
         ...(leadRecord?.Shepherded_By === "" ||
         leadRecord?.Shepherded_By === null ||
@@ -268,7 +269,8 @@ const W2Part2PackageCustomize = ({
                 Rail_Stage: "2.5",
                 Action: "Shepherded By Added",
                 Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify({
+                Customized_Package: true,
+                Data_Details2: JSON.stringify({
                   Shepherded_By: currentUser?.id || "Unknown",
                 }),
               },
@@ -291,7 +293,7 @@ const W2Part2PackageCustomize = ({
               Rail_Stage: "2.5",
               Action: "Customised Package Sent Template Saved",
               Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
+              Data_Details2: JSON.stringify({
                 Package_Id: selectedPackageId,
                 Additional_Armed: addedArmedBodyguards,
                 Additional_Unarmed: addedUnarmedBodyguards,
@@ -301,6 +303,7 @@ const W2Part2PackageCustomize = ({
                   serializeAdditionalServicesString(selectedServices),
                 Addon_Service: serializeAddonServicesForCrm(selectedServices),
                 Service_City: serviceCity.trim(),
+                Customized_Package: true,
                 Rail_Stage: "2.5",
               }),
             },

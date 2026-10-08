@@ -1,6 +1,6 @@
 import React from "react";
 import { X } from "lucide-react";
-import { useZohoCrm } from "../context/ZohoCrmContext";
+import { useZohoCrm } from "../../context/ZohoCrmContext";
 
 const OpenCanvas = ({ open = false, onClose = () => {} }) => {
   const { leadRecord } = useZohoCrm();

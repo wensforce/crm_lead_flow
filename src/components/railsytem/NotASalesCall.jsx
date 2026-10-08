@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { toZohoDateTimeOffset, updateRecord } from "../../api/zohoCrm";
 import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
-import FollowUpActionModal from "../FollowUpActionModal";
+import FollowUpActionModal from "../ui/FollowUpActionModal";
 
 const LEAD_STATUS_OPTIONS = [
   "Junk",
@@ -142,7 +142,7 @@ const NotASalesCall = ({ onBack = () => {} }) => {
               Rail_Stage: "12",
               Action: "Lead Closed",
               Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
+              Data_Details2: JSON.stringify({
                 Lead_Status: leadStatus,
                 Closing_Remark: closingRemark,
                 Rail_Stage: "12",

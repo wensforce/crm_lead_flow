@@ -3,7 +3,7 @@ import { Check, Shield } from "lucide-react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { searchRecord, updateRecord } from "../../api/zohoCrm";
 import { sendPermanentBodyguardTemplate } from "../../api/sendTemplate";
-import Loader from "../Loader";
+import Loader from "../ui/Loader";
 import { toast } from "sonner";
 import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
@@ -248,7 +248,7 @@ const W3Part2Permanent = ({
               Agent: currentUser?.id || "Unknown",
               Action: "Permanent Template Sent",
               Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
+              Data_Details2: JSON.stringify({
                 Permanent_Sent_Template: permanentSentTemplate,
                 Permanent_Template_Sent: true,
               }),
@@ -313,7 +313,7 @@ const W3Part2Permanent = ({
                 Rail_Stage: "3.5",
                 Action: "Permanent Template Sent Saved",
                 Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify({
+                Data_Details2: JSON.stringify({
                   Rail_Stage: "3.5",
                 }),
               },

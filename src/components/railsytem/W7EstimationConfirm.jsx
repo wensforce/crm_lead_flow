@@ -16,11 +16,11 @@ import {
 import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { getRecord, updateRecord } from "../../api/zohoCrm";
 import sendTemplateMessage from "../../api/sendTemplate";
-import Loader from "../Loader";
+import Loader from "../ui/Loader";
 import SalesApprovalPending from "./SalesApprovalPending";
 import SalesApprovedSummary from "./SalesApprovedSummary";
-import DelayMinutesModal from "../DelayMinutesModal";
-import ConfirmNavigateModal from "../ConfirmNavigateModal";
+import DelayMinutesModal from "../ui/DelayMinutesModal";
+import ConfirmNavigateModal from "../ui/ConfirmNavigateModal";
 import { toast } from "sonner";
 import { ADDON_PRICES } from "../../config/pricing";
 import {
@@ -765,7 +765,7 @@ const EstimationConfirm = ({
               Rail_Stage: "7",
               Action: "Approved Saved",
               Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify(payload),
+              Data_Details2: JSON.stringify(payload),
             },
           ],
         });
@@ -830,7 +830,7 @@ const EstimationConfirm = ({
               Rail_Stage: "7",
               Action: "Estimate Deadline Delayed",
               Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
+              Data_Details2: JSON.stringify({
                 Delayed_By: minutes,
                 Estimate_Deadline_At: nextDeadlineValue,
               }),

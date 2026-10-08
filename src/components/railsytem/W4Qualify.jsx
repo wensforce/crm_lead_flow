@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import DecisionMakerModal from '../DecisionMakerModal'
-import FollowUpActionModal from '../FollowUpActionModal'
-import Loader from '../Loader'
+import DecisionMakerModal from '../ui/DecisionMakerModal'
+import FollowUpActionModal from '../ui/FollowUpActionModal'
+import Loader from '../ui/Loader'
 import { useZohoCrm } from '../../context/ZohoCrmContext'
 import { getRecord, toZohoDateTimeOffset, updateRecord } from '../../api/zohoCrm'
 import useSendDeckTemplate from '../../hooks/useSendDeckTemplate'
@@ -374,7 +374,7 @@ const W4Qualify = ({
                 Rail_Stage: "12",
                 Action: "No Decision Maker",
                 Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify(payload),
+                Data_Details2: JSON.stringify(payload),
               },
             ],
           })
@@ -580,7 +580,7 @@ const W4Qualify = ({
                 Rail_Stage: "6",
                 Action: "Estimation Sent Saved",
                 Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify(payload),
+                Data_Details2: JSON.stringify(payload),
               },
             ],
           })

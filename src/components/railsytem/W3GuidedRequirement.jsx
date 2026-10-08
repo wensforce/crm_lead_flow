@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { updateRecord } from "../../api/zohoCrm";
-import Loader from "../Loader";
+import Loader from "../ui/Loader";
 import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
 const PILLARS = [
@@ -410,7 +410,7 @@ const W3GuidedRequirement = ({
                 Rail_Stage: "3",
                 Action: "Guided Service Discovered",
                 Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify({
+                Data_Details2: JSON.stringify({
                   Service_Pillar: formData.servicePillar,
                   Service_Line: formData.serviceLine,
                   Motion: formData.motion,
@@ -455,7 +455,7 @@ const W3GuidedRequirement = ({
                   Rail_Stage: "3",
                   Action: "Shepherded By Added",
                   Timestamp: new Date().toISOString(),
-                  Data_Details: JSON.stringify({
+                  Data_Details2: JSON.stringify({
                     Shepherded_By: currentUser?.id || "Unknown",
                   }),
                 },

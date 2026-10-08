@@ -20,7 +20,7 @@ import sendTemplateMessage, {
   sendPackageTemplate,
   sendTemplateWithCards,
 } from "../../api/sendTemplate";
-import Loader from "../Loader";
+import Loader from "../ui/Loader";
 import { toast } from "sonner";
 import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
@@ -151,7 +151,7 @@ const W2PackageCard = ({
               Rail_Stage: "2",
               Action: "Package Template Sent",
               Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
+              Data_Details2: JSON.stringify({
                 Package_Id: selectedPackageId,
                 Package_Template_Sent: true,
                 Package_Name: selectedPackage?.Title || "",
@@ -227,7 +227,7 @@ const W2PackageCard = ({
             Rail_Stage: "2",
             Action: "Package Template Sent Saved",
             Timestamp: new Date().toISOString(),
-            Data_Details: JSON.stringify(payload),
+            Data_Details2: JSON.stringify(payload),
           },
         ],
       });
@@ -247,7 +247,7 @@ const W2PackageCard = ({
               Rail_Stage: "2",
               Action: "Shepherded By Added",
               Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
+              Data_Details2: JSON.stringify({
                 Shepherded_By: currentUser?.id || "Unknown",
               }),
             },
@@ -317,7 +317,7 @@ const W2PackageCard = ({
               Rail_Stage: "2",
               Action: "Customise Package",
               Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify(payload),
+              Data_Details2: JSON.stringify(payload),
             },
           ],
         });
