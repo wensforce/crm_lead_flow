@@ -3,7 +3,8 @@ import DecisionMakerModal from '../ui/DecisionMakerModal'
 import FollowUpActionModal from '../ui/FollowUpActionModal'
 import Loader from '../ui/Loader'
 import { useZohoCrm } from '../../context/ZohoCrmContext'
-import { getRecord, toZohoDateTimeOffset, updateRecord } from '../../api/zohoCrm'
+import { getRecord, toZohoDateTimeOffset } from '../../api/zohoCrm'
+import useSaveLead from '../../hooks/useSaveLead'
 import useSendDeckTemplate from '../../hooks/useSendDeckTemplate'
 import sendTemplateMessage from '../../api/sendTemplate'
 import { toast } from 'sonner'
@@ -14,7 +15,6 @@ import {
   parseAdditionalServicesString,
   parseAddonServices,
 } from '../../utils/addonServices'
-import addAndUpdateLogs from '../../utils/addAndUpdateLogs'
 
 const DECISION_MAKER_OPTIONS = [
   'Party',
@@ -189,6 +189,7 @@ const W4Qualify = ({
   onDecisionMakerModalContinue = () => { },
 }) => {
   const { leadRecord, leadId, fetchLeadRecord, isLoading: isLeadLoading, currentUser } = useZohoCrm()
+  const saveLead = useSaveLead()
   const bodyguardRows = leadRecord?.Bodyguard_Requirements || []
   const carRows = leadRecord?.Car_Requirements || []
   const [selectedPackage, setSelectedPackage] = useState(null)
@@ -360,27 +361,15 @@ const W4Qualify = ({
         Rail_Stage:"12",
       }
       try {
-        await updateRecord('Leads', leadRecord?.id, payload)
-        await fetchLeadRecord(leadRecord?.id)
-        try {
-          await addAndUpdateLogs({
-            Name: leadRecord?.Last_Name || "Unknown",
-            Lead_ID: leadRecord?.id,
-            Mobile: leadRecord?.Mobile || "none",
-            RailLog_Owner: currentUser?.id || "Unknown",
-            Logs: [
-              {
-                Agent: currentUser?.id || "Unknown",
-                Rail_Stage: "12",
-                Action: "No Decision Maker",
-                Timestamp: new Date().toISOString(),
-                Data_Details2: JSON.stringify(payload),
-              },
-            ],
-          })
-        } catch (error) {
-          console.log(JSON.stringify(error))
-        }
+        await saveLead({
+          fields: payload,
+          log: {
+            stage: '12',
+            action: 'No Decision Maker',
+            details: payload,
+          },
+          sync: 'local',
+        })
         onDecisionMakerModalContinue()
         toast.success('Lead updated successfully!')
       } catch (error) {
@@ -564,29 +553,15 @@ const W4Qualify = ({
       const isDirty = isCrmPayloadDirty(payload, leadRecord)
 
       if (isDirty) {
-        await updateRecord('Leads', leadRecord?.id, {
-          ...payload,
+        await saveLead({
+          fields: payload,
+          log: {
+            stage: '6',
+            action: 'Estimation Sent Saved',
+            details: payload,
+          },
+          sync: 'local',
         })
-        await fetchLeadRecord(leadRecord?.id)
-        try {
-          await addAndUpdateLogs({
-            Name: leadRecord?.Last_Name || "Unknown",
-            Lead_ID: leadRecord?.id,
-            Mobile: leadRecord?.Mobile || "none",
-            RailLog_Owner: currentUser?.id || "Unknown",
-            Logs: [
-              {
-                Agent: currentUser?.id || "Unknown",
-                Rail_Stage: "6",
-                Action: "Estimation Sent Saved",
-                Timestamp: new Date().toISOString(),
-                Data_Details2: JSON.stringify(payload),
-              },
-            ],
-          })
-        } catch (error) {
-          console.log(JSON.stringify(error))
-        }
       }
 
       setIsConfirmModalOpen(false)

@@ -3,6 +3,10 @@ import { useZohoCrm } from "../../context/ZohoCrmContext";
 import Loader from "../ui/Loader";
 import { toast } from "sonner";
 import useSaveLead from "../../hooks/useSaveLead";
+import LastChatMessages from "./LastChatMessages";
+import PitchText from "./PitchText";
+import { PITCH_FIELDS } from "../../config/pitches";
+import { usePitches } from "../../context/PitchContext";
 
 const W0TheLeadRecord = ({
   onStartDiscovery = () => {},
@@ -19,6 +23,7 @@ const W0TheLeadRecord = ({
   const [selectedLanguage, setSelectedLanguage] = useState("None");
 
   const saveLead = useSaveLead();
+  const { setLanguage: setPitchLanguage } = usePitches();
 
   useEffect(() => {
     if (!leadRecord) return;
@@ -118,13 +123,13 @@ const W0TheLeadRecord = ({
             </div>
           )}
 
-          <div className="space-y-2.5">
-            <label className="text-sm font-medium text-foreground">Pitch</label>
-            <div className="rounded-xl border border-border bg-card px-4 py-3.5 text-sm leading-relaxed text-card-foreground md:px-5">
-              WENS Force mein aapka swagat hai. How can I help you? Can we
-              proceed in English, ya Hindi mein baat karun?
-            </div>
-          </div>
+          <LastChatMessages customerNumber={leadRecord?.Mobile} count={5} />
+
+          <PitchText
+            field={PITCH_FIELDS.leadRecord}
+            label="Pitch"
+            fallback="WENS Force mein aapka swagat hai. How can I help you? Can we proceed in English, ya Hindi mein baat karun?"
+          />
 
           <div className="space-y-2.5">
             <label
@@ -136,7 +141,10 @@ const W0TheLeadRecord = ({
             <select
               id="preferred-language"
               value={selectedLanguage || "None"}
-              onChange={(e) => setSelectedLanguage(e.target.value)}
+              onChange={(e) => {
+                setSelectedLanguage(e.target.value);
+                setPitchLanguage(e.target.value);
+              }}
               className="ui-input h-12 text-sm"
             >
               <option value="None">None</option>

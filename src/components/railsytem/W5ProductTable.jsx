@@ -8,14 +8,10 @@ import {
   Car as CarIcon,
 } from "lucide-react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
-import {
-  connectToCustomer,
-  searchRecord,
-  updateRecord,
-} from "../../api/zohoCrm";
+import { connectToCustomer, searchRecord } from "../../api/zohoCrm";
 import { sendProductPhotoTemplate } from "../../api/sendTemplate";
 import { toast } from "sonner";
-import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
+import useSaveLead from "../../hooks/useSaveLead";
 
 const ARMED_TYPES = [
   "Civilian",
@@ -124,20 +120,6 @@ const toCount = (value) => {
   if (!Number.isFinite(parsed)) return 0;
   return Math.max(0, Math.floor(parsed));
 };
-
-const createBodyguardItemByCategory = (category) => {
-  const armed = category === "Armed Bodyguard";
-  return {
-    ...createBodyguardItem(),
-    bodyguardCategory: category,
-    bodyguardType: armed ? ARMED_TYPES[0] : UNARMED_TYPES[0],
-  };
-};
-
-const createCarItemByType = (carType) => ({
-  ...createCarItem(),
-  carBodyType: carType,
-});
 
 const getProductBasePrice = (product, kind) => {
   if (!product) return "";
@@ -311,8 +293,8 @@ const W5ProductTable = ({ onApproveRows = () => {}, onBack = () => {} }) => {
   const initializedLeadIdRef = React.useRef(null);
   const rowRefs = React.useRef({});
 
-  // eslint-disable-next-line no-unused-vars
-  const { leadRecord, fetchLeadRecord, currentUser } = useZohoCrm();
+  const { leadRecord, currentUser } = useZohoCrm();
+  const saveLead = useSaveLead();
 
   const roleName = String(currentUser?.role?.name || "")
     .trim()
@@ -474,79 +456,71 @@ const W5ProductTable = ({ onApproveRows = () => {}, onBack = () => {} }) => {
 
     const bgRows = leadRecord?.Bodyguard_Requirements || [];
     const carRows = leadRecord?.Car_Requirements || [];
-    const hasSubformData = bgRows.length > 0 || carRows.length > 0;
 
-    let itemsToProcess = [];
+    const savedBodyguards = bgRows.map((row) => ({
+      id: makeId(),
+      crmRowId: row.id,
+      kind: "bodyguard",
+      photoSent: false,
+      bodyguardCategory: row.Bodyguard_Category || "Armed Bodyguard",
+      bodyguardType: row.Bodyguard_Type || ARMED_TYPES[0],
+      selectedProductId: row.Bodyguard?.id || "",
+      productImageUrl: "",
+      bodyguardLabel: row.Bodyguard_Label || "",
+      bodyguardProduct: row.Bodyguard?.name || "",
+      weaponType: row.Weapon_Type || "",
+      weaponName: row.Weapon_Name || "",
+      vipDuty: row.VIP_Duty || "No",
+      shape: row.Shape || "",
+      height: row.Height ? String(row.Height) : "",
+      attire: row.Attire || "",
+      biceps: row.Biceps ? String(row.Biceps) : "",
+      packageType: row.Package_Type,
+      productCode: "",
+      selling: row.Selling_Price ? String(row.Selling_Price) : "",
+      margin: row.Margin != null ? `${row.Margin}%` : "30%",
+      foodAllowance: row.MealPrice > 0 ? "Yes" : "No",
+    }));
+    const savedCars = carRows.map((row) => ({
+      id: makeId(),
+      crmRowId: row.id,
+      kind: "car",
+      photoSent: false,
+      carBodyType: row.Car_Type || FALLBACK_CAR_BODY_TYPES[0],
+      selectedProductId: "",
+      productImageUrl: "",
+      carLabel: row.Car_Label || "",
+      carMake: row.Car_Make || "",
+      carModel: row.Car_Model?.name || String(row.Car_Model || ""),
+      packageType: row.Package_Type,
+      productCode: "",
+      selling: row.Selling_Price ? String(row.Selling_Price) : "",
+      margin: row.Margin != null ? `${row.Margin}%` : "30%",
+    }));
 
-    if (hasSubformData) {
-      // Restore items from CRM subform rows
-      const loadedItems = [
-        ...bgRows.map((row) => ({
-          id: makeId(),
-          crmRowId: row.id,
-          kind: "bodyguard",
-          photoSent: false,
-          bodyguardCategory: row.Bodyguard_Category || "Armed Bodyguard",
-          bodyguardType: row.Bodyguard_Type || ARMED_TYPES[0],
-          selectedProductId: row.Bodyguard?.id || "",
-          productImageUrl: "",
-          bodyguardLabel: row.Bodyguard_Label || "",
-          bodyguardProduct: row.Bodyguard?.name || "",
-          weaponType: row.Weapon_Type || "",
-          weaponName: row.Weapon_Name || "",
-          vipDuty: row.VIP_Duty || "No",
-          shape: row.Shape || "",
-          height: row.Height ? String(row.Height) : "",
-          attire: row.Attire || "",
-          biceps: row.Biceps ? String(row.Biceps) : "",
-          packageType: row.Package_Type,
-          productCode: "",
-          selling: row.Selling_Price ? String(row.Selling_Price) : "",
-          margin: row.Margin != null ? `${row.Margin}%` : "30%",
-          foodAllowance: row.MealPrice > 0 ? "Yes" : "No",
-        })),
-        ...carRows.map((row) => ({
-          id: makeId(),
-          crmRowId: row.id,
-          kind: "car",
-          photoSent: false,
-          carBodyType: row.Car_Type || FALLBACK_CAR_BODY_TYPES[0],
-          selectedProductId: "",
-          productImageUrl: "",
-          carLabel: row.Car_Label || "",
-          carMake: row.Car_Make || "",
-          carModel: row.Car_Model?.name || String(row.Car_Model || ""),
-          packageType: row.Package_Type,
-          productCode: "",
-          selling: row.Selling_Price ? String(row.Selling_Price) : "",
-          margin: row.Margin != null ? `${row.Margin}%` : "30%",
-        })),
-      ];
-      setItems(loadedItems);
-      itemsToProcess = loadedItems;
-    } else {
-      // If subforms are empty, seed cards from requirement counts from previous step.
-      const seededItems = [
-        ...Array.from({ length: armedHintCount }, () =>
-          createBodyguardItemByCategory("Armed Bodyguard"),
-        ),
-        ...Array.from({ length: unarmedHintCount }, () =>
-          createBodyguardItemByCategory("Unarmed Bodyguard"),
-        ),
-        ...Array.from({ length: standardCarHintCount }, () =>
-          createCarItemByType("SUV"),
-        ),
-        ...Array.from({ length: luxuryCarHintCount }, () =>
-          createCarItemByType("Limousine"),
-        ),
-      ];
+    // Match totals only. Armed/unarmed and standard/luxury are not compared.
+    // Add empty cards when the requirement is higher. Keep extra saved cards.
+    const missingBodyguards = Math.max(
+      0,
+      armedHintCount + unarmedHintCount - savedBodyguards.length,
+    );
+    const missingCars = Math.max(
+      0,
+      standardCarHintCount + luxuryCarHintCount - savedCars.length,
+    );
 
-      itemsToProcess =
-        seededItems.length > 0
-          ? seededItems
-          : [createBodyguardItem(), createCarItem()];
-      setItems(itemsToProcess);
+    let itemsToProcess = [
+      ...savedBodyguards,
+      ...Array.from({ length: missingBodyguards }, () => createBodyguardItem()),
+      ...savedCars,
+      ...Array.from({ length: missingCars }, () => createCarItem()),
+    ];
+
+    if (itemsToProcess.length === 0) {
+      itemsToProcess = [createBodyguardItem(), createCarItem()];
     }
+
+    setItems(itemsToProcess);
 
     // Fetch products for all items so dropdowns are populated
     itemsToProcess.forEach((item) => {
@@ -774,33 +748,15 @@ const W5ProductTable = ({ onApproveRows = () => {}, onBack = () => {} }) => {
       newSentCodes.add(item.productCode);
       const updatedTemplateValue = Array.from(newSentCodes).join(",");
 
-      await updateRecord(
-        "Leads",
-        leadRecord.id,
-        { Product_Sent_Template: updatedTemplateValue },
-        ["workflow"],
-      );
-      try {
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "4",
-              Action: `Product Photo Sent ${item.productCode}`,
-              Timestamp: new Date().toISOString(),
-              Data_Details2: JSON.stringify({
-                Product_Sent_Template: updatedTemplateValue,
-              }),
-            },
-          ],
-        });
-      } catch (error) {
-        console.log(JSON.stringify(error));
-      }
+      await saveLead({
+        fields: { Product_Sent_Template: updatedTemplateValue },
+        log: {
+          stage: "4",
+          action: `Product Photo Sent ${item.productCode}`,
+          details: { Product_Sent_Template: updatedTemplateValue },
+        },
+        sync: "local",
+      });
       toast.success("Photo sent successfully");
       // update local state
       setSentProductIds(newSentCodes);
@@ -890,44 +846,22 @@ const W5ProductTable = ({ onApproveRows = () => {}, onBack = () => {} }) => {
         };
       });
 
-    await updateRecord(
-      "Leads",
-      leadRecord.id,
-      {
-        Bodyguard_Requirements: bgRows,
-        Car_Requirements: carRows,
-        Rail_Stage: "4",
-        Guided_Catalog_Sent: false,
-        Lead_Status: "Guided Catalogue Sent",
+    const fields = {
+      Bodyguard_Requirements: bgRows,
+      Car_Requirements: carRows,
+      Rail_Stage: "4",
+      Guided_Catalog_Sent: false,
+      Lead_Status: "Guided Catalogue Sent",
+    };
+    await saveLead({
+      fields,
+      log: {
+        stage: "4",
+        action: "Guided Catalogue Sent Saved",
+        details: fields,
       },
-      ["workflow"],
-    );
-    await fetchLeadRecord(leadRecord.id);
-    try {
-      await addAndUpdateLogs({
-        Name: leadRecord?.Last_Name || "Unknown",
-        Lead_ID: leadRecord?.id,
-        Mobile: leadRecord?.Mobile || "none",
-        RailLog_Owner: currentUser?.id || "Unknown",
-        Logs: [
-          {
-            Agent: currentUser?.id || "Unknown",
-            Rail_Stage: "4",
-            Action: "Guided Catalogue Sent Saved",
-            Timestamp: new Date().toISOString(),
-            Data_Details2: JSON.stringify({
-              Bodyguard_Requirements: bgRows,
-              Car_Requirements: carRows,
-              Rail_Stage: "4",
-              Guided_Catalog_Sent: false,
-              Lead_Status: "Guided Catalogue Sent",
-            }),
-          },
-        ],
-      });
-    } catch (error) {
-      console.log(JSON.stringify(error));
-    }
+      sync: "refetch",
+    });
   };
 
   const removeItem = (id) => {

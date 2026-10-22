@@ -208,7 +208,7 @@ const RailSystem = () => {
       <W2PackageCard
         onCatalogueConfirm={() => openW11From(2)}
         onCustomisePackage={() => {}}
-        onBack={goBackInFlow}
+        onBack={() => goToStep(1, "undecided")}
         onSelectPackageForCustomization={(packageId) =>
           openCustomizePackage(packageId)
         }
@@ -318,10 +318,15 @@ const RailSystem = () => {
       let stage = Number(leadRecord.Rail_Stage);
       if (Number.isNaN(stage)) return;
 
-      if (stage === 5.5 ) stage = 11;
-      if(stage === 6) stage = 7;
-      // Advance UI from CRM updates, but don't pull user back to an older step.
-      setActiveStep((currentStep) => (stage > currentStep ? stage : currentStep));
+      if (stage === 5.5) stage = 11;
+      if (stage === 6) stage = 7;
+      setActiveStep((currentStep) => {
+        // Deck is 11, but it comes before qualify (6) and dispatch (7).
+        if (stage === 11 && currentStep >= 6 && currentStep !== 11) {
+          return currentStep;
+        }
+        return stage > currentStep ? stage : currentStep;
+      });
 
       const inferred = inferJourneyFlow(stage);
       if (inferred) {

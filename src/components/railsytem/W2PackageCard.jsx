@@ -1,28 +1,22 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   Shield,
   Car,
   Package,
   DollarSign,
-  ArrowRight,
   CheckCircle2,
   Clock,
   Send,
-  Plane,
-  Luggage,
-  Droplet,
-  Phone,
-  Users,
+  Search,
+  ChevronDown,
 } from "lucide-react";
-import { getAllRecords, updateRecord } from "../../api/zohoCrm";
+import { getAllRecords } from "../../api/zohoCrm";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
-import sendTemplateMessage, {
-  sendPackageTemplate,
-  sendTemplateWithCards,
-} from "../../api/sendTemplate";
+import { sendPackageTemplate } from "../../api/sendTemplate";
 import Loader from "../ui/Loader";
 import { toast } from "sonner";
-import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
+import { filterIndianCities } from "../../data/indianCities";
+import useSaveLead from "../../hooks/useSaveLead";
 
 /** Zoho/ISO value → datetime-local input (YYYY-MM-DDTHH:mm). */
 const toDateTimeLocalValue = (value) => {
@@ -53,42 +47,52 @@ const W2PackageCard = ({
   onSendTemplate = () => {},
   onSelectPackageForCustomization = () => {},
 }) => {
-  const { leadRecord, fetchLeadRecord, currentUser } = useZohoCrm();
+  const { leadRecord, currentUser } = useZohoCrm();
+  const saveLead = useSaveLead();
   const [packagesData, setPackagesData] = useState([]);
   const [selectedPackageId, setSelectedPackageId] = useState("");
+  const [packageSearch, setPackageSearch] = useState("");
+  const [packageMenuOpen, setPackageMenuOpen] = useState(false);
+  const packagePickerRef = useRef(null);
+  const packageSearchRef = useRef(null);
   const [isTemplateSent, setIsTemplateSent] = useState(false);
   const [templateStatusMessage, setTemplateStatusMessage] = useState("");
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   const [templateError, setTemplateError] = useState("");
   const [loading, setLoading] = useState(false);
   const [serviceCity, setServiceCity] = useState("");
+  const [citySearch, setCitySearch] = useState("");
+  const [cityMenuOpen, setCityMenuOpen] = useState(false);
+  const cityPickerRef = useRef(null);
+  const citySearchRef = useRef(null);
   const [serviceStartDate, setServiceStartDate] = useState("");
   const [serviceEndDate, setServiceEndDate] = useState("");
+  const hydratedLeadIdRef = useRef(null);
   const selectedPackage = packagesData.find(
     (pkg) => pkg.id === selectedPackageId,
+  );
+
+  const filteredPackages = useMemo(() => {
+    const query = packageSearch.trim().toLowerCase();
+    if (!query) return packagesData;
+    return packagesData.filter((pkg) => {
+      const price = pkg.Price ?? "";
+      const formattedPrice =
+        typeof pkg.Price === "number" ? pkg.Price.toLocaleString("en-IN") : "";
+      return `${pkg.Title || ""} ${price} ${formattedPrice}`
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [packagesData, packageSearch]);
+
+  const visibleCities = useMemo(
+    () => filterIndianCities(citySearch),
+    [citySearch],
   );
 
   const packageSummary = selectedPackage
     ? `${selectedPackage.Title} - ${selectedPackage.bodyguardType} - ${selectedPackage.numberofArmedBodyguard} bodyguards - ${selectedPackage.vehicleType} - ₹${selectedPackage.Price}`
     : "Select a package to see details.";
-
-  const catalogStatus = isTemplateSent
-    ? `Sent / ${templateStatusMessage || "msg-id generated"} - Delivered`
-    : "Pending - send template first to unlock catalog confirmation.";
-
-  // Map icon names to Lucide components
-  const getIconComponent = (iconName) => {
-    const iconMap = {
-      Car,
-      Shield,
-      Plane,
-      Luggage,
-      Droplet,
-      Phone,
-      Users,
-    };
-    return iconMap[iconName] || null;
-  };
 
   useEffect(() => {
     getAllRecords("Package", { per_page: 20 }).then((data) => {
@@ -101,6 +105,56 @@ const W2PackageCard = ({
       setPackagesData(formattedPrivileges);
     });
   }, []);
+
+  useEffect(() => {
+    if (!packageMenuOpen) return undefined;
+    packageSearchRef.current?.focus();
+
+    const handlePointerDown = (event) => {
+      if (!packagePickerRef.current?.contains(event.target)) {
+        setPackageMenuOpen(false);
+        setPackageSearch("");
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setPackageMenuOpen(false);
+        setPackageSearch("");
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [packageMenuOpen]);
+
+  useEffect(() => {
+    if (!cityMenuOpen) return undefined;
+    citySearchRef.current?.focus();
+
+    const handlePointerDown = (event) => {
+      if (!cityPickerRef.current?.contains(event.target)) {
+        setCityMenuOpen(false);
+        setCitySearch("");
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setCityMenuOpen(false);
+        setCitySearch("");
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [cityMenuOpen]);
 
   const handleSelectPackage = (packageId) => {
     setSelectedPackageId(packageId);
@@ -136,33 +190,22 @@ const W2PackageCard = ({
       setTemplateStatusMessage(
         `msg-id ${response?.id || Date.now().toString().slice(-4)}`,
       );
-      await updateRecord("Leads", leadRecord?.id, {
-        Package_Template_Sent: true,
+      await saveLead({
+        fields: {
+          Package_Template_Sent: true,
+        },
+        log: {
+          stage: "2",
+          action: "Package Template Sent",
+          details: {
+            Package_Id: selectedPackageId,
+            Package_Template_Sent: true,
+            Package_Name: selectedPackage?.Title || "",
+            Package_Template: "lead_rail_system_package_v3",
+          },
+        },
+        sync: "local",
       });
-      try {
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "2",
-              Action: "Package Template Sent",
-              Timestamp: new Date().toISOString(),
-              Data_Details2: JSON.stringify({
-                Package_Id: selectedPackageId,
-                Package_Template_Sent: true,
-                Package_Name: selectedPackage?.Title || "",
-                Package_Template: "lead_rail_system_package_v3",
-              }),
-            },
-          ],
-        });
-      } catch (error) {
-        console.log(JSON.stringify(error));
-      }
       toast.success("Template sent successfully");
       onSendTemplate();
     } catch (error) {
@@ -212,55 +255,24 @@ const W2PackageCard = ({
           Shepherded_By: currentUser?.id || "Unknown",
         });
       }
-      await updateRecord("Leads", leadRecord?.id, payload);
-      await fetchLeadRecord(leadRecord?.id);
-      try {
-        
-      await addAndUpdateLogs({
-        Name: leadRecord?.Last_Name || "Unknown",
-        Lead_ID: leadRecord?.id,
-        Mobile: leadRecord?.Mobile || "none",
-        RailLog_Owner: currentUser?.id || "Unknown",
-        Logs: [
-          {
-            Agent: currentUser?.id || "Unknown",
-            Rail_Stage: "2",
-            Action: "Package Template Sent Saved",
-            Timestamp: new Date().toISOString(),
-            Data_Details2: JSON.stringify(payload),
+      await saveLead({
+        fields: {
+          ...payload,
+        },
+        log: {
+          stage: "2",
+          action: "Package Template Sent Saved",
+          details: {
+            ...payload,
           },
-        ],
+        },
+        sync: "local",
       });
-      if (
-        leadRecord?.Shepherded_By === "" ||
-        leadRecord?.Shepherded_By === null ||
-        leadRecord?.Shepherded_By === undefined
-      ) {
-        addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "2",
-              Action: "Shepherded By Added",
-              Timestamp: new Date().toISOString(),
-              Data_Details2: JSON.stringify({
-                Shepherded_By: currentUser?.id || "Unknown",
-              }),
-            },
-          ],
-        });
-      }
-    } catch (error) {
-        console.log(JSON.stringify(error));
-    }
       toast.success("Catalogue confirmed sent successfully");
       onCatalogueConfirm();
     } catch (error) {
       console.error("Error confirming catalog:", error);
+      alert(JSON.stringify(error));
       alert("Failed to confirm catalog. Please try again.");
     } finally {
       setLoading(false);
@@ -268,20 +280,24 @@ const W2PackageCard = ({
   };
 
   useEffect(() => {
-    if (leadRecord?.Package_Template_Sent === true) {
+    if (!leadRecord?.id || hydratedLeadIdRef.current === leadRecord.id) return;
+    hydratedLeadIdRef.current = leadRecord.id;
+
+    const templateAlreadySent =
+      leadRecord.Package_Template_Sent === true ||
+      leadRecord.Package_Template_Sent === "true";
+    if (templateAlreadySent) {
       setIsTemplateSent(true);
-      setTemplateStatusMessage(`Catalog Already sent.`);
+      setTemplateStatusMessage("Catalog Already sent.");
     }
-    if (leadRecord) {
-      setSelectedPackageId(leadRecord?.Package_Id || "");
-      setServiceCity(leadRecord?.Service_City || "");
-      setServiceStartDate(
-        toDateTimeLocalValue(leadRecord?.Service_Start_Date_And_Time),
-      );
-      setServiceEndDate(
-        toDateTimeLocalValue(leadRecord?.Service_End_Date_And_Time),
-      );
-    }
+    setSelectedPackageId(leadRecord.Package_Id || "");
+    setServiceCity(leadRecord.Service_City || "");
+    setServiceStartDate(
+      toDateTimeLocalValue(leadRecord.Service_Start_Date_And_Time),
+    );
+    setServiceEndDate(
+      toDateTimeLocalValue(leadRecord.Service_End_Date_And_Time),
+    );
   }, [leadRecord]);
 
   const handleCustomisePackage = async () => {
@@ -303,27 +319,40 @@ const W2PackageCard = ({
         Service_Start_Date_And_Time: fromDateTimeLocalValue(serviceStartDate),
         Service_End_Date_And_Time: fromDateTimeLocalValue(serviceEndDate),
       };
-      await updateRecord("Leads", leadRecord?.id, payload);
-      await fetchLeadRecord(leadRecord?.id);
-      try {
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "2",
-              Action: "Customise Package",
-              Timestamp: new Date().toISOString(),
-              Data_Details2: JSON.stringify(payload),
-            },
-          ],
-        });
-      } catch (error) {
-        console.log(JSON.stringify(error));
-      }
+      // await updateRecord("Leads", leadRecord?.id, payload);
+      // await fetchLeadRecord(leadRecord?.id);
+      // try {
+      //   await addAndUpdateLogs({
+      //     Name: leadRecord?.Last_Name || "Unknown",
+      //     Lead_ID: leadRecord?.id,
+      //     Mobile: leadRecord?.Mobile || "none",
+      //     RailLog_Owner: currentUser?.id || "Unknown",
+      //     Logs: [
+      //       {
+      //         Agent: currentUser?.id || "Unknown",
+      //         Rail_Stage: "2",
+      //         Action: "Customise Package",
+      //         Timestamp: new Date().toISOString(),
+      //         Data_Details2: JSON.stringify(payload),
+      //       },
+      //     ],
+      //   });
+      // } catch (error) {
+      //   console.log(JSON.stringify(error));
+      // }
+      await saveLead({
+        fields: {
+          ...payload,
+        },
+        log: {
+          stage: "2",
+          action: "Customise Package",
+          details: {
+            ...payload,
+          },
+        },
+        sync: "local",
+      });
       onSelectPackageForCustomization(selectedPackageId);
       onCustomisePackage();
     } catch (error) {
@@ -369,21 +398,100 @@ const W2PackageCard = ({
             >
               Package selector <span className="text-destructive">*</span>
             </label>
-            <select
-              id="w2-package-picker"
-              value={selectedPackageId}
-              onChange={(event) => handleSelectPackage(event.target.value)}
-              className="ui-input h-12 text-sm"
-            >
-              <option value="" disabled>
-                Select a package
-              </option>
-              {packagesData.map((pkg) => (
-                <option key={pkg.id} value={pkg.id}>
-                  {pkg.Title} | ₹{pkg.Price?.toLocaleString("en-IN") || 0}
-                </option>
-              ))}
-            </select>
+            <div className="relative" ref={packagePickerRef}>
+              <button
+                type="button"
+                id="w2-package-picker"
+                aria-haspopup="listbox"
+                aria-expanded={packageMenuOpen}
+                onClick={() => {
+                  setPackageSearch("");
+                  setCityMenuOpen(false);
+                  setPackageMenuOpen((open) => !open);
+                }}
+                className="ui-input flex h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm"
+              >
+                <span
+                  className={
+                    selectedPackage
+                      ? "truncate text-foreground"
+                      : "truncate text-muted-foreground"
+                  }
+                >
+                  {selectedPackage
+                    ? `${selectedPackage.Title} | ₹${selectedPackage.Price?.toLocaleString("en-IN") || 0}`
+                    : "Select a package"}
+                </span>
+                <ChevronDown
+                  size={16}
+                  className={`shrink-0 text-muted-foreground transition ${packageMenuOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+
+              {packageMenuOpen && (
+                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                  <div className="border-b border-border p-2">
+                    <div className="relative">
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                        <Search
+                          size={16}
+                          className="text-muted-foreground"
+                          strokeWidth={2}
+                        />
+                      </div>
+                      <input
+                        ref={packageSearchRef}
+                        type="search"
+                        value={packageSearch}
+                        onChange={(event) =>
+                          setPackageSearch(event.target.value)
+                        }
+                        placeholder="Search packages"
+                        aria-label="Search packages"
+                        className="ui-input h-10 w-full pl-9 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <ul
+                    role="listbox"
+                    aria-label="Packages"
+                    className="max-h-60 overflow-y-auto py-1"
+                  >
+                    {filteredPackages.length === 0 ? (
+                      <li className="px-3 py-2.5 text-sm text-muted-foreground">
+                        No packages match
+                      </li>
+                    ) : (
+                      filteredPackages.map((pkg) => {
+                        const isSelected = pkg.id === selectedPackageId;
+                        return (
+                          <li key={pkg.id}>
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={isSelected}
+                              onClick={() => {
+                                handleSelectPackage(pkg.id);
+                                setPackageMenuOpen(false);
+                                setPackageSearch("");
+                              }}
+                              className={`flex w-full items-center px-3 py-2.5 text-left text-sm transition hover:bg-primary/10 ${
+                                isSelected
+                                  ? "bg-primary/10 font-medium text-foreground"
+                                  : "text-foreground"
+                              }`}
+                            >
+                              {pkg.Title} | ₹
+                              {pkg.Price?.toLocaleString("en-IN") || 0}
+                            </button>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2.5">
@@ -393,15 +501,100 @@ const W2PackageCard = ({
             >
               Service city <span className="text-destructive">*</span>
             </label>
-            <input
-              id="w2-service-city"
-              type="text"
-              value={serviceCity}
-              onChange={(event) => setServiceCity(event.target.value)}
-              required
-              className="ui-input h-12 text-sm"
-              placeholder="Enter service city"
-            />
+            <div className="relative" ref={cityPickerRef}>
+              <button
+                type="button"
+                id="w2-service-city"
+                aria-haspopup="listbox"
+                aria-expanded={cityMenuOpen}
+                onClick={() => {
+                  setCitySearch("");
+                  setPackageMenuOpen(false);
+                  setCityMenuOpen((open) => !open);
+                }}
+                className="ui-input flex h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm"
+              >
+                <span
+                  className={
+                    serviceCity
+                      ? "truncate text-foreground"
+                      : "truncate text-muted-foreground"
+                  }
+                >
+                  {serviceCity || "Select a city"}
+                </span>
+                <ChevronDown
+                  size={16}
+                  className={`shrink-0 text-muted-foreground transition ${cityMenuOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+
+              {cityMenuOpen && (
+                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                  <div className="border-b border-border p-2">
+                    <div className="relative">
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                        <Search
+                          size={16}
+                          className="text-muted-foreground"
+                          strokeWidth={2}
+                        />
+                      </div>
+                      <input
+                        ref={citySearchRef}
+                        type="search"
+                        value={citySearch}
+                        onChange={(event) => setCitySearch(event.target.value)}
+                        placeholder="Search cities"
+                        aria-label="Search cities"
+                        className="ui-input h-10 w-full pl-9 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <ul
+                    role="listbox"
+                    aria-label="Cities"
+                    className="max-h-60 overflow-y-auto py-1"
+                  >
+                    {!citySearch.trim() && (
+                      <li className="px-3 py-1.5 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                        Metro cities
+                      </li>
+                    )}
+                    {visibleCities.length === 0 ? (
+                      <li className="px-3 py-2.5 text-sm text-muted-foreground">
+                        No cities match
+                      </li>
+                    ) : (
+                      visibleCities.map((city) => {
+                        const isSelected = city === serviceCity;
+                        return (
+                          <li key={city}>
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={isSelected}
+                              onClick={() => {
+                                setServiceCity(city);
+                                setCityMenuOpen(false);
+                                setCitySearch("");
+                              }}
+                              className={`flex w-full items-center px-3 py-2.5 text-left text-sm transition hover:bg-primary/10 ${
+                                isSelected
+                                  ? "bg-primary/10 font-medium text-foreground"
+                                  : "text-foreground"
+                              }`}
+                            >
+                              {city}
+                            </button>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -663,7 +856,7 @@ const W2PackageCard = ({
             </button>
             <button
               type="button"
-              disabled={!selectedPackageId}
+              disabled={!selectedPackageId || loading}
               onClick={handleCustomisePackage}
               className="btn-secondary min-h-12 min-w-56 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -671,6 +864,7 @@ const W2PackageCard = ({
             </button>
             <button
               type="button"
+              disabled={loading}
               onClick={onBack}
               className="btn-secondary min-h-12 min-w-28"
             >

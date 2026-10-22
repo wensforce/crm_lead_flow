@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Search } from "lucide-react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
-import { updateRecord } from "../../api/zohoCrm";
+import { filterIndianCities } from "../../data/indianCities";
 import Loader from "../ui/Loader";
-import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
+import useSaveLead from "../../hooks/useSaveLead";
 
 const PILLARS = [
   { id: "Protective Services", label: "Protective Services" },
@@ -101,7 +102,8 @@ const W3GuidedRequirement = ({
   onNotSalesCall = () => {},
   onBack = () => {},
 }) => {
-  const { leadRecord, fetchLeadRecord, currentUser } = useZohoCrm();
+  const { leadRecord, currentUser } = useZohoCrm();
+  const saveLead = useSaveLead();
 
   const defaultFormData = {
     servicePillar: PILLARS[0].id,
@@ -127,6 +129,10 @@ const W3GuidedRequirement = ({
   const [initialFormData, setInitialFormData] = useState(defaultFormData);
   const [validationError, setValidationError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [citySearch, setCitySearch] = useState("");
+  const [cityMenuOpen, setCityMenuOpen] = useState(false);
+  const cityPickerRef = useRef(null);
+  const citySearchRef = useRef(null);
   const handleChange = (e) => {
     const { name, value, type } = e.target;
     setFormData((prev) => ({
@@ -159,6 +165,11 @@ const W3GuidedRequirement = ({
     return normalized;
   };
 
+  const visibleCities = useMemo(
+    () => filterIndianCities(citySearch),
+    [citySearch],
+  );
+
   const availableServiceLines = useMemo(
     () => SERVICE_LINES[formData.servicePillar] ?? [],
     [formData.servicePillar],
@@ -172,6 +183,31 @@ const W3GuidedRequirement = ({
     coverageType === COVERAGE.bodyguard || coverageType === COVERAGE.both;
   const showCarSection =
     coverageType === COVERAGE.car || coverageType === COVERAGE.both;
+
+  useEffect(() => {
+    if (!cityMenuOpen) return undefined;
+    citySearchRef.current?.focus();
+
+    const handlePointerDown = (event) => {
+      if (!cityPickerRef.current?.contains(event.target)) {
+        setCityMenuOpen(false);
+        setCitySearch("");
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setCityMenuOpen(false);
+        setCitySearch("");
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [cityMenuOpen]);
 
   useEffect(() => {
     if (!availableServiceLines.includes(formData.serviceLine)) {
@@ -365,10 +401,15 @@ const W3GuidedRequirement = ({
 
     const isPermanent = formData.deploymentType === "Permanent";
 
+    const needsShepherd =
+      leadRecord?.Shepherded_By === "" ||
+      leadRecord?.Shepherded_By === null ||
+      leadRecord?.Shepherded_By === undefined;
+
     try {
       if (isDirty) {
         setLoading(true);
-        await updateRecord("Leads", leadRecord?.id, {
+        const fields = {
           Service_Pillar: formData.servicePillar,
           Service_Line: formData.serviceLine,
           Motion: formData.motion,
@@ -390,81 +431,20 @@ const W3GuidedRequirement = ({
           Special_Requirements: formData.specialRequirement,
           Rail_Stage: "3",
           Lead_Status: "Service Discovered",
-          ...(leadRecord?.Shepherded_By === "" ||
-          leadRecord?.Shepherded_By === null ||
-          leadRecord?.Shepherded_By === undefined
+          ...(needsShepherd
             ? { Shepherded_By: currentUser?.id || "Unknown" }
             : {}),
+        };
+
+        await saveLead({
+          fields,
+          log: {
+            stage: "3",
+            action: "Guided Service Discovered",
+            details: fields,
+          },
+          sync: "local",
         });
-
-        await fetchLeadRecord(leadRecord?.id);
-        try {
-          await addAndUpdateLogs({
-            Name: leadRecord?.Last_Name || "Unknown",
-            Lead_ID: leadRecord?.id,
-            Mobile: leadRecord?.Mobile || "none",
-            RailLog_Owner: currentUser?.id || "Unknown",
-            Logs: [
-              {
-                Agent: currentUser?.id || "Unknown",
-                Rail_Stage: "3",
-                Action: "Guided Service Discovered",
-                Timestamp: new Date().toISOString(),
-                Data_Details2: JSON.stringify({
-                  Service_Pillar: formData.servicePillar,
-                  Service_Line: formData.serviceLine,
-                  Motion: formData.motion,
-                  Deployment_Type: formData.deploymentType,
-                  Service_City: formData.city,
-                  Site_Coverage_Location_s: formData.site,
-                  Service_Start_Date_And_Time: fromDateTimeLocalValue(
-                    formData.startDate,
-                  ),
-                  Service_End_Date_And_Time: fromDateTimeLocalValue(
-                    formData.endDate,
-                  ),
-                  Armed_Unarmed: formData.bodyguardType,
-                  No_of_Armed_Personnel: formData.armedCount,
-                  No_of_UnArmed_Personnel: formData.unarmedCount,
-                  Shift_Pattern: formData.shiftPattern,
-                  Car_Segement: formData.Car_Segement,
-                  No_of_Standard_Car: formData.standardCars,
-                  No_of_Luxury_Car: formData.luxuryCars,
-                  Car_Booking_Type: formData.carBookingType,
-                  Special_Requirements: formData.specialRequirement,
-                  Rail_Stage: "3",
-                  Lead_Status: "Service Discovered",
-                }),
-              },
-            ],
-          });
-
-          if (
-            leadRecord?.Shepherded_By === "" ||
-            leadRecord?.Shepherded_By === null ||
-            leadRecord?.Shepherded_By === undefined
-          ) {
-            await addAndUpdateLogs({
-              Name: leadRecord?.Last_Name || "Unknown",
-              Lead_ID: leadRecord?.id,
-              Mobile: leadRecord?.Mobile || "none",
-              RailLog_Owner: currentUser?.id || "Unknown",
-              Logs: [
-                {
-                  Agent: currentUser?.id || "Unknown",
-                  Rail_Stage: "3",
-                  Action: "Shepherded By Added",
-                  Timestamp: new Date().toISOString(),
-                  Data_Details2: JSON.stringify({
-                    Shepherded_By: currentUser?.id || "Unknown",
-                  }),
-                },
-              ],
-            });
-          }
-        } catch (error) {
-          console.log(JSON.stringify(error));
-        }
       }
       setLoading(false);
       if (isPermanent) {
@@ -475,16 +455,17 @@ const W3GuidedRequirement = ({
     } catch (error) {
       console.error("Failed to update record:", error);
       setLoading(false);
-      setValidationError(
-        "Failed to update record. Please try again.",
-        JSON.stringify(error),
-      );
+      setValidationError("Failed to update record. Please try again.");
     }
   };
 
   return (
     <>
-      <Loader open={loading} />
+      <Loader
+        open={loading}
+        title="Saving requirement"
+        message="Please wait while we save the guided requirement."
+      />
       <section className="mx-auto w-full max-w-6xl px-4 py-8 md:px-8 md:py-12">
         <div className="mb-7 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
@@ -608,15 +589,99 @@ const W3GuidedRequirement = ({
               >
                 City <span className="text-destructive">*</span>
               </label>
-              <input
-                id="w3-city"
-                type="text"
-                name="city"
-                value={formData.city}
-                onChange={handleChange}
-                required
-                className="ui-input h-12 text-sm"
-              />
+              <div className="relative" ref={cityPickerRef}>
+                <button
+                  type="button"
+                  id="w3-city"
+                  aria-haspopup="listbox"
+                  aria-expanded={cityMenuOpen}
+                  onClick={() => {
+                    setCitySearch("");
+                    setCityMenuOpen((open) => !open);
+                  }}
+                  className="ui-input flex h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm"
+                >
+                  <span
+                    className={
+                      formData.city
+                        ? "truncate text-foreground"
+                        : "truncate text-muted-foreground"
+                    }
+                  >
+                    {formData.city || "Select a city"}
+                  </span>
+                  <ChevronDown
+                    size={16}
+                    className={`shrink-0 text-muted-foreground transition ${cityMenuOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+
+                {cityMenuOpen && (
+                  <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                    <div className="border-b border-border p-2">
+                      <div className="relative">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                          <Search
+                            size={16}
+                            className="text-muted-foreground"
+                            strokeWidth={2}
+                          />
+                        </div>
+                        <input
+                          ref={citySearchRef}
+                          type="search"
+                          value={citySearch}
+                          onChange={(event) => setCitySearch(event.target.value)}
+                          placeholder="Search cities"
+                          aria-label="Search cities"
+                          className="ui-input h-10 w-full pl-9 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <ul
+                      role="listbox"
+                      aria-label="Cities"
+                      className="max-h-60 overflow-y-auto py-1"
+                    >
+                      {!citySearch.trim() && (
+                        <li className="px-3 py-1.5 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                          Metro cities
+                        </li>
+                      )}
+                      {visibleCities.length === 0 ? (
+                        <li className="px-3 py-2.5 text-sm text-muted-foreground">
+                          No cities match
+                        </li>
+                      ) : (
+                        visibleCities.map((city) => {
+                          const isSelected = city === formData.city;
+                          return (
+                            <li key={city}>
+                              <button
+                                type="button"
+                                role="option"
+                                aria-selected={isSelected}
+                                onClick={() => {
+                                  setFormData((prev) => ({ ...prev, city }));
+                                  setCityMenuOpen(false);
+                                  setCitySearch("");
+                                }}
+                                className={`flex w-full items-center px-3 py-2.5 text-left text-sm transition hover:bg-primary/10 ${
+                                  isSelected
+                                    ? "bg-primary/10 font-medium text-foreground"
+                                    : "text-foreground"
+                                }`}
+                              >
+                                {city}
+                              </button>
+                            </li>
+                          );
+                        })
+                      )}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -928,27 +993,37 @@ const W3GuidedRequirement = ({
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-3 pt-2">
+          <div className="flex flex-wrap items-start gap-3 pt-2">
             <button
               type="button"
               onClick={handleContinue}
-              className="btn-primary min-h-12 min-w-52"
+              disabled={loading}
+              className="btn-primary min-h-12 min-w-52 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {formData.deploymentType === "Permanent"
-                ? "Continue"
-                : "Continue - Product Table"}
+              {loading
+                ? "Saving..."
+                : formData.deploymentType === "Permanent"
+                  ? "Continue"
+                  : "Continue - Product Table"}
             </button>
-            <button
-              type="button"
-              onClick={onNotSalesCall}
-              className="min-h-12 min-w-52 rounded-md border border-destructive/45 bg-background px-4 py-2.5 font-medium text-destructive transition hover:bg-destructive/10"
-            >
-              Not a sales call - KD popup
-            </button>
+            <div className="flex max-w-56 flex-col gap-1">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={onNotSalesCall}
+                className="min-h-12 min-w-44 rounded-md border border-destructive/45 bg-background px-4 py-2.5 font-medium text-destructive transition hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Non Sales Call
+              </button>
+              <p className="text-xs leading-snug text-muted-foreground">
+                Close out spam, vendors, or wrong numbers here.
+              </p>
+            </div>
             <button
               type="button"
               onClick={onBack}
-              className="btn-secondary min-h-12 min-w-28"
+              disabled={loading}
+              className="btn-secondary min-h-12 min-w-28 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Back
             </button>

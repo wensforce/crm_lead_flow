@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Car,
   Shield,
@@ -23,7 +23,7 @@ import {
   serializeAddonServicesForCrm,
   serializeAdditionalServicesString,
 } from "../../utils/addonServices";
-import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
+import useSaveLead from "../../hooks/useSaveLead";
 
 const W2Part2PackageCustomize = ({
   selectedPackageId = "",
@@ -36,7 +36,8 @@ const W2Part2PackageCustomize = ({
   onBack = () => {},
 }) => {
   const [selectedPackage, setSelectedPackage] = useState({});
-  const { leadRecord, fetchLeadRecord, currentUser } = useZohoCrm();
+  const { leadRecord, currentUser } = useZohoCrm();
+  const saveLead = useSaveLead();
   const [loading, setLoading] = useState(false);
   const [validationError, setValidationError] = useState("");
   const [templateSent, setTemplateSent] = useState(false);
@@ -57,6 +58,7 @@ const W2Part2PackageCustomize = ({
     standardVehicles: 0,
     serviceCity: "",
   });
+  const hydratedLeadIdRef = useRef(null);
 
   // Fetch selected package when selectedPackageId changes
   useEffect(() => {
@@ -112,32 +114,32 @@ const W2Part2PackageCustomize = ({
     initialAddons,
   ]);
 
-  // Load saved addon values from leadRecord
+  // Load saved addon values once. Later lead updates (template sent) must not clear the form.
   useEffect(() => {
-    if (leadRecord) {
-      const leadPackageId =
-        typeof leadRecord.Package_Id === "object"
-          ? leadRecord.Package_Id?.id || leadRecord.Package_Id?.ID || ""
-          : leadRecord.Package_Id || "";
+    if (!leadRecord?.id || hydratedLeadIdRef.current === leadRecord.id) return;
+    hydratedLeadIdRef.current = leadRecord.id;
 
-      const saved = {
-        armedBodyguards: leadRecord.Additional_Armed || 0,
-        unarmedBodyguards: leadRecord.Additional_Unarmed || 0,
-        luxuryVehicles: leadRecord.Additional_Luxury_Car || 0,
-        standardVehicles: leadRecord.Additional_Standard_Car || 0,
-        serviceCity: leadRecord.Service_City || "",
-        services: getLeadAddonServices(leadRecord),
-      };
-      // Do not overwrite selected package with empty CRM value.
-      setSelectedPackageId((prev) => prev || leadPackageId || "");
-      setInitialAddons(saved);
-      setServiceCity(saved.serviceCity);
-      setAddedArmedBodyguards(saved.armedBodyguards);
-      setAddedUnarmedBodyguards(saved.unarmedBodyguards);
-      setAddedLuxuryVehicles(saved.luxuryVehicles);
-      setAddedStandardVehicles(saved.standardVehicles);
-      setSelectedServices(saved.services);
-    }
+    const leadPackageId =
+      typeof leadRecord.Package_Id === "object"
+        ? leadRecord.Package_Id?.id || leadRecord.Package_Id?.ID || ""
+        : leadRecord.Package_Id || "";
+
+    const saved = {
+      armedBodyguards: leadRecord.Additional_Armed || 0,
+      unarmedBodyguards: leadRecord.Additional_Unarmed || 0,
+      luxuryVehicles: leadRecord.Additional_Luxury_Car || 0,
+      standardVehicles: leadRecord.Additional_Standard_Car || 0,
+      serviceCity: leadRecord.Service_City || "",
+      services: getLeadAddonServices(leadRecord),
+    };
+    setSelectedPackageId((prev) => prev || leadPackageId || "");
+    setInitialAddons(saved);
+    setServiceCity(saved.serviceCity);
+    setAddedArmedBodyguards(saved.armedBodyguards);
+    setAddedUnarmedBodyguards(saved.unarmedBodyguards);
+    setAddedLuxuryVehicles(saved.luxuryVehicles);
+    setAddedStandardVehicles(saved.standardVehicles);
+    setSelectedServices(saved.services);
   }, [leadRecord, setSelectedPackageId]);
 
   const validateForm = () => {
@@ -188,30 +190,20 @@ const W2Part2PackageCustomize = ({
         ` || "",
         templateName: "lead_rail_system_package_v3",
       });
-      await updateRecord("Leads", leadRecord?.id, {
-        Customised_Package_Sent_Template: true,
+
+      await saveLead({
+        fields: {
+          Customised_Package_Sent_Template: true,
+        },
+        log: {
+          stage: "2.5",
+          action: "Customised Package Sent Template Saved",
+          details: {
+            Customised_Package_Sent_Template: true,
+          },
+        },
+        sync: "local",
       });
-      try {
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "2.5",
-              Action: "Customised Package Sent Template",
-              Timestamp: new Date().toISOString(),
-              Data_Details2: JSON.stringify({
-                Customised_Package_Sent_Template: true,
-              }),
-            },
-          ],
-        });
-      } catch (error) {
-        console.log(JSON.stringify(error));
-      }
       setTemplateSent(true);
     } catch (err) {
       console.error("Failed to send template:", err);
@@ -234,84 +226,49 @@ const W2Part2PackageCustomize = ({
         return;
       }
       setLoading(true);
-      await updateRecord("Leads", leadRecord?.id, {
-        Package_Id: selectedPackageId,
-        Additional_Armed: addedArmedBodyguards,
-        Additional_Unarmed: addedUnarmedBodyguards,
-        Additional_Luxury_Car: addedLuxuryVehicles,
-        Additional_Standard_Car: addedStandardVehicles,
-        Additional_Services:
-          serializeAdditionalServicesString(selectedServices),
-        Addon_Service: serializeAddonServicesForCrm(selectedServices),
-        Service_City: serviceCity.trim(),
-        Customized_Package: true,
-        Rail_Stage: "2.5",
-        ...(leadRecord?.Shepherded_By === "" ||
-        leadRecord?.Shepherded_By === null ||
-        leadRecord?.Shepherded_By === undefined
-          ? { Shepherded_By: currentUser?.id || "Unknown" }
-          : {}),
-      });
-      try {
-        if (
-          leadRecord?.Shepherded_By === "" ||
+      await saveLead({
+        fields: {
+          Package_Id: selectedPackageId,
+          Additional_Armed: addedArmedBodyguards,
+          Additional_Unarmed: addedUnarmedBodyguards,
+          Additional_Luxury_Car: addedLuxuryVehicles,
+          Additional_Standard_Car: addedStandardVehicles,
+          Additional_Services:
+            serializeAdditionalServicesString(selectedServices),
+          Addon_Service: serializeAddonServicesForCrm(selectedServices),
+          Service_City: serviceCity.trim(),
+          Customized_Package: true,
+          Rail_Stage: "2.5",
+          ...(leadRecord?.Shepherded_By === "" ||
           leadRecord?.Shepherded_By === null ||
           leadRecord?.Shepherded_By === undefined
-        ) {
-          await addAndUpdateLogs({
-            Name: leadRecord?.Last_Name || "Unknown",
-            Lead_ID: leadRecord?.id,
-            Mobile: leadRecord?.Mobile || "none",
-            RailLog_Owner: currentUser?.id || "Unknown",
-            Logs: [
-              {
-                Agent: currentUser?.id || "Unknown",
-                Rail_Stage: "2.5",
-                Action: "Shepherded By Added",
-                Timestamp: new Date().toISOString(),
-                Customized_Package: true,
-                Data_Details2: JSON.stringify({
-                  Shepherded_By: currentUser?.id || "Unknown",
-                }),
-              },
-            ],
-          });
-        }
-      } catch (error) {
-        console.log(JSON.stringify(error));
-      }
-      await fetchLeadRecord(leadRecord?.id);
-      try {
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "2.5",
-              Action: "Customised Package Sent Template Saved",
-              Timestamp: new Date().toISOString(),
-              Data_Details2: JSON.stringify({
-                Package_Id: selectedPackageId,
-                Additional_Armed: addedArmedBodyguards,
-                Additional_Unarmed: addedUnarmedBodyguards,
-                Additional_Luxury_Car: addedLuxuryVehicles,
-                Additional_Standard_Car: addedStandardVehicles,
-                Additional_Services:
-                  serializeAdditionalServicesString(selectedServices),
-                Addon_Service: serializeAddonServicesForCrm(selectedServices),
-                Service_City: serviceCity.trim(),
-                Customized_Package: true,
-                Rail_Stage: "2.5",
-              }),
-            },
-          ],
-        });
-      } catch (error) {
-        console.log(JSON.stringify(error));
-      }
+            ? { Shepherded_By: currentUser?.id || "Unknown" }
+            : {}),
+        },
+        log: {
+          stage: "2.5",
+          action: "Customised Package Saved",
+          details: {
+            Package_Id: selectedPackageId,
+            Additional_Armed: addedArmedBodyguards,
+            Additional_Unarmed: addedUnarmedBodyguards,
+            Additional_Luxury_Car: addedLuxuryVehicles,
+            Additional_Standard_Car: addedStandardVehicles,
+            Additional_Services:
+              serializeAdditionalServicesString(selectedServices),
+            Addon_Service: serializeAddonServicesForCrm(selectedServices),
+            Service_City: serviceCity.trim(),
+            Customized_Package: true,
+            Rail_Stage: "2.5",
+            ...(leadRecord?.Shepherded_By === "" ||
+            leadRecord?.Shepherded_By === null ||
+            leadRecord?.Shepherded_By === undefined
+              ? { Shepherded_By: currentUser?.id || "Unknown" }
+              : {}),
+          },
+        },
+        sync: "local",
+      });
       setLoading(false);
       onContinue();
     } catch (err) {

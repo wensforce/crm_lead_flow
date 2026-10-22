@@ -3,6 +3,9 @@ import { useZohoCrm } from "../../context/ZohoCrmContext";
 import Loader from "../ui/Loader";
 import { toast } from "sonner";
 import useSaveLead from "../../hooks/useSaveLead";
+import PitchText from "./PitchText";
+import { PITCH_FIELDS } from "../../config/pitches";
+import { usePitches } from "../../context/PitchContext";
 
 const W1PitchLanguage = ({
   onPackageNamed = () => {},
@@ -10,9 +13,7 @@ const W1PitchLanguage = ({
   onNotSalesCall = () => {},
   onBack = () => {},
 }) => {
-  const { leadRecord, leadId, isLoading, error, fetchLeadRecord, currentUser } =
-    useZohoCrm();
-  const leadPhone = leadRecord?.Mobile || "+91 98xxx xxxxx";
+  const { leadRecord } =  useZohoCrm();
   const [pitchData, setPitchData] = useState({
     language: leadRecord?.Preferred_Language || "None",
     callerName: leadRecord?.Last_Name || "",
@@ -20,6 +21,7 @@ const W1PitchLanguage = ({
   const [loading, setLoading] = useState(false);
 
   const saveLead = useSaveLead();
+  const { setLanguage: setPitchLanguage } = usePitches();
 
   const handleContinue = async (onContinue) => {
     if (pitchData.language === "None") {
@@ -63,6 +65,20 @@ const W1PitchLanguage = ({
       } finally {
         setLoading(false);
       }
+    } else if ((leadRecord?.Rail_Stage || 0) < "1") {
+      try {
+        setLoading(true);
+        await saveLead({
+          fields: {
+            Rail_Stage: "1",
+          },
+          sync: "local",
+        });
+      } catch (error) {
+        toast.error(error.message || "Error saving lead. Please try again.");
+      } finally {
+        setLoading(false);
+      }
     }
 
     onContinue();
@@ -90,7 +106,7 @@ const W1PitchLanguage = ({
               Rail CRM flow
             </p>
             <h1 className="mt-1.5 text-2xl font-semibold text-foreground md:text-3xl">
-              KA Discovery Call
+              Mandatory Discovery Call
             </h1>
           </div>
         </div>
@@ -99,20 +115,16 @@ const W1PitchLanguage = ({
           <header className="rounded-2xl bg-primary px-4 py-4 text-primary-foreground md:px-6">
             <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
               <h2 className="text-lg font-semibold tracking-tight md:text-xl">
-                KA - Discovery Call
+                Mandatory Discovery Call
               </h2>
             </div>
           </header>
 
-          <div className="space-y-2.5">
-            <label className="text-sm font-medium text-foreground">
-              Pitch on screen
-            </label>
-            <div className="rounded-xl border border-border bg-card px-4 py-3.5 text-sm leading-relaxed text-card-foreground md:px-5">
-              How can I help you today? English ya Hindi - aap jaise comfortable
-              hon.
-            </div>
-          </div>
+          <PitchText
+            field={PITCH_FIELDS.discoveryCall}
+            label="Pitch on screen"
+            fallback="How can I help you today? English ya Hindi - aap jaise comfortable hon."
+          />
 
           <div className="space-y-2.5">
             <label
@@ -124,9 +136,10 @@ const W1PitchLanguage = ({
             <select
               id="w1-preferred-language"
               value={pitchData.language || "None"}
-              onChange={(e) =>
-                setPitchData((prev) => ({ ...prev, language: e.target.value }))
-              }
+              onChange={(e) => {
+                setPitchData((prev) => ({ ...prev, language: e.target.value }));
+                setPitchLanguage(e.target.value);
+              }}
               className="ui-input h-12 text-sm"
             >
               <option value="None">None</option>
@@ -141,8 +154,11 @@ const W1PitchLanguage = ({
               htmlFor="w1-caller-name"
               className="text-sm font-medium text-foreground"
             >
-              Caller name
+              Correct Caller name
             </label>
+            <p className="text-xs text-muted-foreground">
+              If the name is already right, leave it as is.
+            </p>
             <input
               id="w1-caller-name"
               type="text"
@@ -158,30 +174,39 @@ const W1PitchLanguage = ({
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 pt-2">
+          <div className="flex flex-wrap items-start gap-3 pt-2">
             <button
               type="button"
+              disabled={loading}
               onClick={() => handleContinue(onPackageNamed)}
               className="btn-primary min-h-12 min-w-52"
             >
-              Customer named a package
+              Customer knows package
             </button>
             <button
               type="button"
+              disabled={loading}
               onClick={() => handleContinue(onGuideCustomer)}
               className="btn-secondary min-h-12 min-w-52"
             >
               Guide the customer
             </button>
+            <div className="flex max-w-56 flex-col gap-1">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={onNotSalesCall}
+                className="min-h-12 min-w-44 rounded-md border border-destructive/45 bg-background px-4 py-2.5 font-medium text-destructive transition hover:bg-destructive/10"
+              >
+                Non Sales Call
+              </button>
+              <p className="text-xs leading-snug text-muted-foreground">
+                Close out spam, vendors, or wrong numbers here.
+              </p>
+            </div>
             <button
               type="button"
-              onClick={onNotSalesCall}
-              className="min-h-12 min-w-44 rounded-md border border-destructive/45 bg-background px-4 py-2.5 font-medium text-destructive transition hover:bg-destructive/10"
-            >
-              Not a sales call - KD popup
-            </button>
-            <button
-              type="button"
+              disabled={loading}
               onClick={onBack}
               className="btn-secondary min-h-11 min-w-32"
             >

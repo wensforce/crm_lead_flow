@@ -27,9 +27,9 @@ export function getFields(entity) {
 export function getRecord(entity, recordId) {
   return window.ZOHO.CRM.API.getRecord({ Entity: entity, RecordID: recordId })
     .then(unwrap)
-    .then((data) => (data.length > 0 ? data[0] : null))
+    .then((data) => (Array.isArray(data) && data.length > 0 ? data[0] : null))
     .catch((err) => {
-      alert(JSON.stringify(err.message));
+      console.error("getRecord failed:", err);
       return null;
     });
 }

@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FileText, Upload } from "lucide-react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
-import { attachFile, updateRecord } from "../../api/zohoCrm";
+import { attachFile } from "../../api/zohoCrm";
+import useSaveLead from "../../hooks/useSaveLead";
 import { sendAgreementTemplate } from "../../api/sendTemplate";
 import { getAgreementPdfFile } from "../../services/PdfGenerator";
 import AgreementTextEditor from "./AgreementTextEditor";
 import Loader from "../ui/Loader";
 import { toast } from "sonner";
-import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
 const sourceButtonClass = (active) =>
   `rounded-lg border px-4 py-2 text-sm font-semibold transition ${
@@ -29,7 +29,8 @@ const W12Agreement = ({
   onBack = () => {},
   onSent = () => {},
 }) => {
-  const { leadRecord, fetchLeadRecord, currentUser } = useZohoCrm();
+  const { leadRecord } = useZohoCrm();
+  const saveLead = useSaveLead();
   const editorRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -182,35 +183,31 @@ const W12Agreement = ({
         Permanent_Agreement_Sent: true,
       };
       try {
-        await updateRecord("Leads", leadRecord.id, sentPayload);
+        await saveLead({
+          fields: sentPayload,
+          log: {
+            stage: "13",
+            action: "Permanent Agreement Sent",
+            details: sentPayload,
+          },
+          sync: "local",
+        });
       } catch {
         sentPayload = {
           Rail_Stage: "13",
           Lead_Status: "Agreement Sent",
           Permanent_Agreement_Sent: true,
         };
-        await updateRecord("Leads", leadRecord.id, sentPayload);
-      }
-      try {
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "13",
-              Action: "Permanent Agreement Sent",
-              Timestamp: new Date().toISOString(),
-              Data_Details2: JSON.stringify(sentPayload),
-            },
-          ],
+        await saveLead({
+          fields: sentPayload,
+          log: {
+            stage: "13",
+            action: "Permanent Agreement Sent",
+            details: sentPayload,
+          },
+          sync: "local",
         });
-      } catch (error) {
-        console.log(JSON.stringify(error));
       }
-      await fetchLeadRecord(leadRecord.id);
 
       setAgreementSent(true);
       toast.success("Agreement sent");
@@ -229,7 +226,7 @@ const W12Agreement = ({
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!agreementSent) {
       toast.error("Send the agreement first");
       return;
@@ -240,42 +237,27 @@ const W12Agreement = ({
     }
     setLoading(true);
     setLoadingMessage("Updating lead stage…");
-    updateRecord("Leads", leadRecord.id, {
-      Rail_Stage: "13",
-      Lead_Status: "Permanent Agreement Sent",
-    })
-      .then(async () => {
-        try {
-          await addAndUpdateLogs({
-            Name: leadRecord?.Last_Name || "Unknown",
-            Lead_ID: leadRecord?.id,
-            Mobile: leadRecord?.Mobile || "none",
-            RailLog_Owner: currentUser?.id || "Unknown",
-            Logs: [
-              {
-                Agent: currentUser?.id || "Unknown",
-                Rail_Stage: "13",
-                Action: "Permanent Bodyguard Agreement Sent Saved",
-                Timestamp: new Date().toISOString(),
-                Data_Details2: JSON.stringify({
-                  Rail_Stage: "13",
-                  Lead_Status: "Permanent Agreement Sent",
-                }),
-              },
-            ],
-          });
-        } catch (error) {
-          console.log(JSON.stringify(error));
-        }
-        onContinue();
-      })
-      .catch((error) => {
-        console.error("Failed to set rail stage 13:", error);
-        toast.error("Failed to set rail stage 13");
-      })
-      .finally(() => {
-        setLoading(false);
+    try {
+      const fields = {
+        Rail_Stage: "13",
+        Lead_Status: "Permanent Agreement Sent",
+      };
+      await saveLead({
+        fields,
+        log: {
+          stage: "13",
+          action: "Permanent Bodyguard Agreement Sent Saved",
+          details: fields,
+        },
+        sync: "local",
       });
+      onContinue();
+    } catch (error) {
+      console.error("Failed to set rail stage 13:", error);
+      toast.error("Failed to set rail stage 13");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
