@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getRecord, updateRecord } from '../../api/zohoCrm'
+import { getRecord } from '../../api/zohoCrm'
 import { useZohoCrm } from '../../context/ZohoCrmContext'
+import useSaveLead from '../../hooks/useSaveLead'
 import useSendDeckTemplate from '../../hooks/useSendDeckTemplate'
-import Loader from '../Loader'
+import Loader from '../ui/Loader'
 import { toast } from 'sonner'
-import addAndUpdateLogs from '../../utils/addAndUpdateLogs'
 
 const formatCurrency = (value) => {
   if (value == null || value === '') return '—'
@@ -18,7 +18,8 @@ const toInt = (value) => {
 }
 
 const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
-  const { leadRecord, fetchLeadRecord, currentUser } = useZohoCrm()
+  const { leadRecord } = useZohoCrm()
+  const saveLead = useSaveLead()
   const [selectedPackage, setSelectedPackage] = useState(null)
   const [loading, setLoading] = useState(false)
   useEffect(() => {
@@ -171,27 +172,15 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
     })
       .then(async () => {
         toast.success("Package deck sent successfully");
-        await updateRecord('Leads', leadRecord?.id, payload)
-        await fetchLeadRecord(leadRecord?.id)
-        try {
-          await addAndUpdateLogs({
-            Name: leadRecord?.Last_Name || "Unknown",
-            Lead_ID: leadRecord?.id,
-            Mobile: leadRecord?.Mobile || "none",
-            RailLog_Owner: currentUser?.id || "Unknown",
-            Logs: [
-              {
-                Agent: currentUser?.id || "Unknown",
-                Rail_Stage: "5.5",
-                Action: `${hasCustomizePackage ? "Customised Package" : "Package"} Deck Sent`,
-                Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify(payload),
-              },
-            ],
-          })
-        } catch (error) {
-          console.log(JSON.stringify(error));
-        }
+        await saveLead({
+          fields: payload,
+          log: {
+            stage: '5.5',
+            action: `${hasCustomizePackage ? 'Customised Package' : 'Package'} Deck Sent`,
+            details: payload,
+          },
+          sync: 'local',
+        })
       })
       .catch((error) => {
         console.error('Error sending package deck template:', error)
@@ -211,35 +200,20 @@ const W11SendPackageDeck = ({ onBack = () => { }, onContinue = () => { } }) => {
         leadRecord?.Open_Package_Estimation !== true
 
       if (needsStageUpdate) {
-        await updateRecord('Leads', leadRecord?.id, {
+        const fields = {
           Rail_Stage: '5.5',
           Open_Package_Estimation: true,
           Lead_Status: 'Deck Sent',
-        })
-        await fetchLeadRecord(leadRecord?.id)
-        try {
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "5.5",
-              Action: "Customised Package Deck Sent Saved",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
-                Rail_Stage: '5.5',
-                Open_Package_Estimation: true,
-                Lead_Status: 'Deck Sent',
-              }),
-            },
-          ],
-        })
-        } catch (error) {
-          console.log(JSON.stringify(error));
         }
+        await saveLead({
+          fields,
+          log: {
+            stage: '5.5',
+            action: 'Customised Package Deck Sent Saved',
+            details: fields,
+          },
+          sync: 'local',
+        })
       }
 
       onContinue()

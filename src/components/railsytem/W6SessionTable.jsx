@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { updateRecord } from '../../api/zohoCrm'
 import { useZohoCrm } from '../../context/ZohoCrmContext'
+import useSaveLead from '../../hooks/useSaveLead'
 import useSendDeckTemplate from '../../hooks/useSendDeckTemplate'
 import AddOnServicesPicker from './AddOnServicesPicker'
 import {
@@ -12,8 +12,7 @@ import {
   serializeAdditionalServicesString,
 } from '../../utils/addonServices'
 import { toast } from 'sonner'
-import Loader from '../Loader'
-import addAndUpdateLogs from '../../utils/addAndUpdateLogs'
+import Loader from '../ui/Loader'
 
 const parseAmount = (value) => {
   if (value == null || value === '') return 0
@@ -35,7 +34,8 @@ const isLuxuryCar = (carType) => {
 }
 
 const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = () => { }, onBack = () => { } }) => {
-  const { leadRecord, fetchLeadRecord, setLeadRecord, currentUser } = useZohoCrm()
+  const { leadRecord } = useZohoCrm()
+  const saveLead = useSaveLead()
   const bodyguardRows = leadRecord?.Bodyguard_Requirements || []
   const carRows = leadRecord?.Car_Requirements || []
   const [editableAddonServices, setEditableAddonServices] = useState([])
@@ -99,34 +99,19 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
 
     if (manageLoading) setIsSavingAddons(true)
     try {
-      const serialized = serializeAddonServicesForCrm(editableAddonServices)
-      await updateRecord('Leads', leadRecord.id, {
-        Addon_Service: serialized,
+      const fields = {
+        Addon_Service: serializeAddonServicesForCrm(editableAddonServices),
         Additional_Services: serializeAdditionalServicesString(editableAddonServices),
-      })
-      await fetchLeadRecord(leadRecord.id)
-      try {
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "5",
-              Action: "Addon Services Saved",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
-                Addon_Service: serialized,
-                Additional_Services: serializeAdditionalServicesString(editableAddonServices),
-              }),
-            },
-          ],
-        })
-      } catch (error) {
-        console.log(JSON.stringify(error))
       }
+      await saveLead({
+        fields,
+        log: {
+          stage: '5',
+          action: 'Addon Services Saved',
+          details: fields,
+        },
+        sync: 'local',
+      })
       const saved = cloneAddonServices(editableAddonServices)
       setInitialAddonServices(saved)
       toast.success('Add-on services saved')
@@ -146,29 +131,15 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
   const sendDeckTemplate = async () => {
     sendDeck({ leadRecord, bodyguardRows, carRows, editableAddonServices })
       .then(async () => {
-        await updateRecord("Leads", leadRecord?.id, { Catalog_Sent: true })
-        try {
-          await addAndUpdateLogs({
-            Name: leadRecord?.Last_Name || "Unknown",
-            Lead_ID: leadRecord?.id,
-            Mobile: leadRecord?.Mobile || "none",
-            RailLog_Owner: currentUser?.id || "Unknown",
-            Logs: [
-              {
-                Agent: currentUser?.id || "Unknown",
-                Rail_Stage: "5",
-                Action: "Catalog Sent",
-                Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify({
-                  Catalog_Sent: true,
-                }),
-              },
-            ],
-          })
-        } catch (error) {
-          console.log(JSON.stringify(error))
-        }
-        setLeadRecord({ ...leadRecord, Catalog_Sent: true })
+        await saveLead({
+          fields: { Catalog_Sent: true },
+          log: {
+            stage: '5',
+            action: 'Catalog Sent',
+            details: { Catalog_Sent: true },
+          },
+          sync: 'local',
+        })
         toast.success("Deck sent successfully");
       })
       .catch((error) => {
@@ -201,35 +172,20 @@ const W6SessionTable = ({ onAddAnotherItem = () => { }, onContinueToQualify = ()
       }
 
       if (needsStageUpdate) {
-        await updateRecord('Leads', leadRecord?.id, {
+        const fields = {
           Rail_Stage: '5',
           Open_Package_Estimation: false,
           Lead_Status: 'Deck Sent',
-        })
-        await fetchLeadRecord(leadRecord?.id)
-        try {
-          await addAndUpdateLogs({
-            Name: leadRecord?.Last_Name || "Unknown",
-            Lead_ID: leadRecord?.id,
-            Mobile: leadRecord?.Mobile || "none",
-            RailLog_Owner: currentUser?.id || "Unknown",
-            Logs: [
-              {
-                Agent: currentUser?.id || "Unknown",
-                Rail_Stage: "5",
-                Action: "Deck Sent Saved",
-                Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify({
-                  Rail_Stage: '5',
-                  Open_Package_Estimation: false,
-                  Lead_Status: 'Deck Sent',
-                }),
-              },
-            ],
-          })
-        } catch (error) {
-          console.log(JSON.stringify(error))
         }
+        await saveLead({
+          fields,
+          log: {
+            stage: '5',
+            action: 'Deck Sent Saved',
+            details: fields,
+          },
+          sync: 'local',
+        })
       }
 
       onContinueToQualify()

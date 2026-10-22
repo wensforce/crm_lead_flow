@@ -8,10 +8,10 @@ import {
   Car as CarIcon,
 } from "lucide-react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
-import { connectToCustomer, searchRecord, updateRecord } from "../../api/zohoCrm";
+import { connectToCustomer, searchRecord } from "../../api/zohoCrm";
 import { sendProductPhotoTemplate } from "../../api/sendTemplate";
 import { toast } from "sonner";
-import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
+import useSaveLead from "../../hooks/useSaveLead";
 
 const ARMED_TYPES = [
   "Civilian",
@@ -121,26 +121,12 @@ const toCount = (value) => {
   return Math.max(0, Math.floor(parsed));
 };
 
-const createBodyguardItemByCategory = (category) => {
-  const armed = category === "Armed Bodyguard";
-  return {
-    ...createBodyguardItem(),
-    bodyguardCategory: category,
-    bodyguardType: armed ? ARMED_TYPES[0] : UNARMED_TYPES[0],
-  };
-};
-
-const createCarItemByType = (carType) => ({
-  ...createCarItem(),
-  carBodyType: carType,
-});
-
 const getProductBasePrice = (product, kind) => {
   if (!product) return "";
   const value =
     kind === "bodyguard"
-      ? product.Cost_Price ?? product.Unit_Price ?? product.Shape_A_Selling
-      : product.Cost_Price ?? product.Unit_Price;
+      ? (product.Cost_Price ?? product.Unit_Price ?? product.Shape_A_Selling)
+      : (product.Cost_Price ?? product.Unit_Price);
   return value ?? "";
 };
 
@@ -155,11 +141,13 @@ const calcQuotePrice = (selling, margin) => {
 // ---- package & food-allowance adjusted effective selling ----
 const getPackageMultiplier = (kind, packageType) => {
   if (kind === "bodyguard") {
+    if (packageType === "4 Hrs") return 0.8;
     if (packageType === "12 Hrs") return 1.5;
     if (packageType === "Full-day/Out-station") return 4;
     return 1;
   }
   // car
+  if (packageType === "4 Hrs & 40 Kms") return 0.8;
   if (packageType === "12 Hrs & 120 Kms") return 1.8;
   if (packageType === "Full-day & 300 Kms") return 4;
   return 1;
@@ -204,20 +192,26 @@ const ImagePreview = ({ src, fallbackKind, fallbackLabel }) => {
             Product preview
           </span>
           <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.65rem] font-medium ${showImage && loaded
-              ? "bg-emerald-500/10 text-emerald-700"
-              : "bg-muted text-muted-foreground"
-              }`}
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.65rem] font-medium ${
+              showImage && loaded
+                ? "bg-emerald-500/10 text-emerald-700"
+                : "bg-muted text-muted-foreground"
+            }`}
           >
             <span
-              className={`h-1.5 w-1.5 rounded-full ${showImage && loaded ? "bg-emerald-500" : "bg-muted-foreground/40"
-                }`}
+              className={`h-1.5 w-1.5 rounded-full ${
+                showImage && loaded
+                  ? "bg-emerald-500"
+                  : "bg-muted-foreground/40"
+              }`}
             />
             {showImage && loaded ? "Ready" : "Awaiting product"}
           </span>
         </div>
 
-        <div className={`relative w-full overflow-hidden bg-muted/15 ${aspectClass}`}>
+        <div
+          className={`relative w-full overflow-hidden bg-muted/15 ${aspectClass}`}
+        >
           {showImage ? (
             <>
               {!loaded ? (
@@ -228,8 +222,9 @@ const ImagePreview = ({ src, fallbackKind, fallbackLabel }) => {
                 alt={fallbackLabel || "Product preview"}
                 onLoad={() => setLoaded(true)}
                 onError={() => setError(true)}
-                className={`h-full w-full transition-opacity duration-300 ${isBodyguard ? "object-cover object-top" : "object-cover"
-                  } ${loaded ? "opacity-100" : "opacity-0"}`}
+                className={`h-full w-full transition-opacity duration-300 ${
+                  isBodyguard ? "object-cover object-top" : "object-cover"
+                } ${loaded ? "opacity-100" : "opacity-0"}`}
               />
               {loaded ? (
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-black/55 via-black/20 to-transparent px-3 pb-3 pt-10">
@@ -269,7 +264,7 @@ const statusClasses = (sent) =>
     ? "border-emerald-700/70 bg-emerald-50 text-emerald-900"
     : "border-amber-700/70 bg-amber-50 text-amber-700";
 
-const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
+const W5ProductTable = ({ onApproveRows = () => {}, onBack = () => {} }) => {
   const [items, setItems] = React.useState([
     createBodyguardItem(),
     createCarItem(),
@@ -298,8 +293,8 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
   const initializedLeadIdRef = React.useRef(null);
   const rowRefs = React.useRef({});
 
-  // eslint-disable-next-line no-unused-vars
-  const { leadRecord, fetchLeadRecord, currentUser } = useZohoCrm();
+  const { leadRecord, currentUser } = useZohoCrm();
+  const saveLead = useSaveLead();
 
   const roleName = String(currentUser?.role?.name || "")
     .trim()
@@ -323,7 +318,9 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
     searchRecord("Products", "(Product_Category:equals:Car)")
       .then((products) => {
         const types = uniqueValues((products || []).map((p) => p.Car_Type));
-        setCarBodyTypeOptions(types.length > 0 ? types : FALLBACK_CAR_BODY_TYPES);
+        setCarBodyTypeOptions(
+          types.length > 0 ? types : FALLBACK_CAR_BODY_TYPES,
+        );
       })
       .catch((err) => {
         console.error("Failed to load car body types:", err);
@@ -459,85 +456,71 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
 
     const bgRows = leadRecord?.Bodyguard_Requirements || [];
     const carRows = leadRecord?.Car_Requirements || [];
-    const hasSubformData = bgRows.length > 0 || carRows.length > 0;
 
-    let itemsToProcess = [];
+    const savedBodyguards = bgRows.map((row) => ({
+      id: makeId(),
+      crmRowId: row.id,
+      kind: "bodyguard",
+      photoSent: false,
+      bodyguardCategory: row.Bodyguard_Category || "Armed Bodyguard",
+      bodyguardType: row.Bodyguard_Type || ARMED_TYPES[0],
+      selectedProductId: row.Bodyguard?.id || "",
+      productImageUrl: "",
+      bodyguardLabel: row.Bodyguard_Label || "",
+      bodyguardProduct: row.Bodyguard?.name || "",
+      weaponType: row.Weapon_Type || "",
+      weaponName: row.Weapon_Name || "",
+      vipDuty: row.VIP_Duty || "No",
+      shape: row.Shape || "",
+      height: row.Height ? String(row.Height) : "",
+      attire: row.Attire || "",
+      biceps: row.Biceps ? String(row.Biceps) : "",
+      packageType: row.Package_Type,
+      productCode: "",
+      selling: row.Selling_Price ? String(row.Selling_Price) : "",
+      margin: row.Margin != null ? `${row.Margin}%` : "30%",
+      foodAllowance: row.MealPrice > 0 ? "Yes" : "No",
+    }));
+    const savedCars = carRows.map((row) => ({
+      id: makeId(),
+      crmRowId: row.id,
+      kind: "car",
+      photoSent: false,
+      carBodyType: row.Car_Type || FALLBACK_CAR_BODY_TYPES[0],
+      selectedProductId: "",
+      productImageUrl: "",
+      carLabel: row.Car_Label || "",
+      carMake: row.Car_Make || "",
+      carModel: row.Car_Model?.name || String(row.Car_Model || ""),
+      packageType: row.Package_Type,
+      productCode: "",
+      selling: row.Selling_Price ? String(row.Selling_Price) : "",
+      margin: row.Margin != null ? `${row.Margin}%` : "30%",
+    }));
 
-    if (hasSubformData) {
-      // Restore items from CRM subform rows
-      const loadedItems = [
-        ...bgRows.map((row) => ({
-          id: makeId(),
-          crmRowId: row.id,
-          kind: "bodyguard",
-          photoSent: false,
-          bodyguardCategory: row.Bodyguard_Category || "Armed Bodyguard",
-          bodyguardType: row.Bodyguard_Type || ARMED_TYPES[0],
-          selectedProductId: row.Bodyguard?.id || "",
-          productImageUrl: "",
-          bodyguardLabel: row.Bodyguard_Label || "",
-          bodyguardProduct: row.Bodyguard?.name || "",
-          weaponType: row.Weapon_Type || "",
-          weaponName: row.Weapon_Name || "",
-          vipDuty: row.VIP_Duty || "No",
-          shape: row.Shape || "",
-          height: row.Height ? String(row.Height) : "",
-          attire: row.Attire || "",
-          biceps: row.Biceps ? String(row.Biceps) : "",
-          packageType: row.Package_Type,
-          productCode: "",
-          selling: row.Selling_Price ? String(row.Selling_Price) : "",
-          margin:
-            row.Margin != null
-              ? `${row.Margin}%`
-              : "30%",
-          foodAllowance: row.MealPrice > 0 ? "Yes" : "No",
-        })),
-        ...carRows.map((row) => ({
-          id: makeId(),
-          crmRowId: row.id,
-          kind: "car",
-          photoSent: false,
-          carBodyType: row.Car_Type || FALLBACK_CAR_BODY_TYPES[0],
-          selectedProductId: "",
-          productImageUrl: "",
-          carLabel: row.Car_Label || "",
-          carMake: row.Car_Make || "",
-          carModel: row.Car_Model?.name || String(row.Car_Model || ""),
-          packageType: row.Package_Type,
-          productCode: "",
-          selling: row.Selling_Price ? String(row.Selling_Price) : "",
-          margin:
-            row.Margin != null
-              ? `${row.Margin}%`
-              : "30%",
-        })),
-      ];
-      setItems(loadedItems);
-      itemsToProcess = loadedItems;
-    } else {
-      // If subforms are empty, seed cards from requirement counts from previous step.
-      const seededItems = [
-        ...Array.from({ length: armedHintCount }, () =>
-          createBodyguardItemByCategory("Armed Bodyguard"),
-        ),
-        ...Array.from({ length: unarmedHintCount }, () =>
-          createBodyguardItemByCategory("Unarmed Bodyguard"),
-        ),
-        ...Array.from({ length: standardCarHintCount }, () =>
-          createCarItemByType("SUV"),
-        ),
-        ...Array.from({ length: luxuryCarHintCount }, () =>
-          createCarItemByType("Limousine"),
-        ),
-      ];
+    // Match totals only. Armed/unarmed and standard/luxury are not compared.
+    // Add empty cards when the requirement is higher. Keep extra saved cards.
+    const missingBodyguards = Math.max(
+      0,
+      armedHintCount + unarmedHintCount - savedBodyguards.length,
+    );
+    const missingCars = Math.max(
+      0,
+      standardCarHintCount + luxuryCarHintCount - savedCars.length,
+    );
 
-      itemsToProcess =
-        seededItems.length > 0
-          ? seededItems
-          : [createBodyguardItem(), createCarItem()];
-      setItems(itemsToProcess);
+    let itemsToProcess = [
+      ...savedBodyguards,
+      ...Array.from({ length: missingBodyguards }, () => createBodyguardItem()),
+      ...savedCars,
+      ...Array.from({ length: missingCars }, () => createCarItem()),
+    ];
+
+    if (itemsToProcess.length === 0) {
+      itemsToProcess = [createBodyguardItem(), createCarItem()];
     }
+
+    setItems(itemsToProcess);
 
     // Fetch products for all items so dropdowns are populated
     itemsToProcess.forEach((item) => {
@@ -580,7 +563,10 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
 
   // Re-sync when sent codes change or rows gain/lose a product (e.g. duplicate).
   const itemProductKey = items
-    .map((item) => `${item.id}:${item.selectedProductId || ""}:${item.productCode || ""}`)
+    .map(
+      (item) =>
+        `${item.id}:${item.selectedProductId || ""}:${item.productCode || ""}`,
+    )
     .join("|");
 
   React.useEffect(() => {
@@ -640,7 +626,10 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
             ...item,
             selectedProductId: product.id,
             productImageUrl:
-              product.Image_Url || product.Record_Image || item.productImageUrl || "",
+              product.Image_Url ||
+              product.Record_Image ||
+              item.productImageUrl ||
+              "",
             carLabel:
               product.Car_Label || product.Product_Name || item.carLabel,
             carMake: product.Car_Make || "",
@@ -759,33 +748,15 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
       newSentCodes.add(item.productCode);
       const updatedTemplateValue = Array.from(newSentCodes).join(",");
 
-      await updateRecord(
-        "Leads",
-        leadRecord.id,
-        { Product_Sent_Template: updatedTemplateValue },
-        ["workflow"],
-      );
-      try {
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "4",
-              Action: `Product Photo Sent ${item.productCode}`,
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
-                Product_Sent_Template: updatedTemplateValue,
-              }),
-            },
-          ],
-        });
-      } catch (error) {
-        console.log(JSON.stringify(error));
-      }
+      await saveLead({
+        fields: { Product_Sent_Template: updatedTemplateValue },
+        log: {
+          stage: "4",
+          action: `Product Photo Sent ${item.productCode}`,
+          details: { Product_Sent_Template: updatedTemplateValue },
+        },
+        sync: "local",
+      });
       toast.success("Photo sent successfully");
       // update local state
       setSentProductIds(newSentCodes);
@@ -875,44 +846,22 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
         };
       });
 
-    await updateRecord(
-      "Leads",
-      leadRecord.id,
-      {
-        Bodyguard_Requirements: bgRows,
-        Car_Requirements: carRows,
-        Rail_Stage: "4",
-        Guided_Catalog_Sent: false,
-        Lead_Status: "Guided Catalogue Sent",
+    const fields = {
+      Bodyguard_Requirements: bgRows,
+      Car_Requirements: carRows,
+      Rail_Stage: "4",
+      Guided_Catalog_Sent: false,
+      Lead_Status: "Guided Catalogue Sent",
+    };
+    await saveLead({
+      fields,
+      log: {
+        stage: "4",
+        action: "Guided Catalogue Sent Saved",
+        details: fields,
       },
-      ["workflow"],
-    );
-    await fetchLeadRecord(leadRecord.id);
-    try {
-      await addAndUpdateLogs({
-        Name: leadRecord?.Last_Name || "Unknown",
-        Lead_ID: leadRecord?.id,
-        Mobile: leadRecord?.Mobile || "none",
-        RailLog_Owner: currentUser?.id || "Unknown",
-        Logs: [
-          {
-            Agent: currentUser?.id || "Unknown",
-            Rail_Stage: "4",
-            Action: "Guided Catalogue Sent Saved",
-            Timestamp: new Date().toISOString(),
-            Data_Details: JSON.stringify({
-              Bodyguard_Requirements: bgRows,
-              Car_Requirements: carRows,
-              Rail_Stage: "4",
-              Guided_Catalog_Sent: false,
-              Lead_Status: "Guided Catalogue Sent",
-            }),
-          },
-        ],
-      });
-    } catch (error) {
-      console.log(JSON.stringify(error));
-    }
+      sync: "refetch",
+    });
   };
 
   const removeItem = (id) => {
@@ -1013,11 +962,11 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
         <label className="text-sm font-medium text-foreground">
           Select Product
           <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-            ({
-              isBodyguard
-                ? item.bodyguardType
-                : `${item.carBodyType}${item.carMake ? ` • ${item.carMake}` : ""} cars`
-            })
+            (
+            {isBodyguard
+              ? item.bodyguardType
+              : `${item.carBodyType}${item.carMake ? ` • ${item.carMake}` : ""} cars`}
+            )
           </span>
         </label>
 
@@ -1110,16 +1059,28 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
           </p>
           <ul className="mt-2 grid gap-2 text-sm md:grid-cols-2 lg:grid-cols-4">
             <li className="rounded-lg border border-border bg-background px-3 py-2">
-              Armed bodyguard: <span className="font-semibold text-foreground">{armedHintCount}</span>
+              Armed bodyguard:{" "}
+              <span className="font-semibold text-foreground">
+                {armedHintCount}
+              </span>
             </li>
             <li className="rounded-lg border border-border bg-background px-3 py-2">
-              Unarmed bodyguard: <span className="font-semibold text-foreground">{unarmedHintCount}</span>
+              Unarmed bodyguard:{" "}
+              <span className="font-semibold text-foreground">
+                {unarmedHintCount}
+              </span>
             </li>
             <li className="rounded-lg border border-border bg-background px-3 py-2">
-              Standard car: <span className="font-semibold text-foreground">{standardCarHintCount}</span>
+              Standard car:{" "}
+              <span className="font-semibold text-foreground">
+                {standardCarHintCount}
+              </span>
             </li>
             <li className="rounded-lg border border-border bg-background px-3 py-2">
-              Luxury car: <span className="font-semibold text-foreground">{luxuryCarHintCount}</span>
+              Luxury car:{" "}
+              <span className="font-semibold text-foreground">
+                {luxuryCarHintCount}
+              </span>
             </li>
           </ul>
         </div>
@@ -1293,10 +1254,15 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                               className="ui-input h-11"
                               value={item.packageType}
                               onChange={(e) =>
-                                updateItem(item.id, "packageType", e.target.value)
+                                updateItem(
+                                  item.id,
+                                  "packageType",
+                                  e.target.value,
+                                )
                               }
                             >
                               <option value="">— select —</option>
+                              <option>4 Hrs</option>
                               <option>8 Hrs</option>
                               <option>12 Hrs</option>
                               <option>Full-day/Out-station</option>
@@ -1310,7 +1276,11 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                               className="ui-input h-11"
                               value={item.weaponType}
                               onChange={(e) =>
-                                updateItem(item.id, "weaponType", e.target.value)
+                                updateItem(
+                                  item.id,
+                                  "weaponType",
+                                  e.target.value,
+                                )
                               }
                             />
                           </label>
@@ -1322,7 +1292,11 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                               className="ui-input h-11"
                               value={item.weaponName}
                               onChange={(e) =>
-                                updateItem(item.id, "weaponName", e.target.value)
+                                updateItem(
+                                  item.id,
+                                  "weaponName",
+                                  e.target.value,
+                                )
                               }
                             />
                           </label>
@@ -1395,7 +1369,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                             <input
                               disabled
                               className="ui-input h-11 cursor-not-allowed opacity-60"
-                              value={ item.photoSent ? item.selling : "X.XX"}
+                              value={item.photoSent ? item.selling : "X.XX"}
                               readOnly
                             />
                           </label>
@@ -1406,7 +1380,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                             <input
                               className="ui-input h-11"
                               disabled={!item.photoSent}
-                              value={ item.photoSent ? item.margin : "X.XX"}
+                              value={item.photoSent ? item.margin : "X.XX"}
                               onChange={(e) =>
                                 updateItem(item.id, "margin", e.target.value)
                               }
@@ -1431,7 +1405,9 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                               <option value="Yes">
                                 Yes — client provides food
                               </option>
-                              <option value="No">No — add ₹500 allowance</option>
+                              <option value="No">
+                                No — add ₹500 allowance
+                              </option>
                             </select>
                           </label>
                         </div>
@@ -1461,27 +1437,36 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                                   <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
                                     Quote Price
                                   </p>
-                                  { item.photoSent ? <p className="mt-0.5 text-xs text-muted-foreground">
-                                    ₹
-                                    {Number(item.selling).toLocaleString("en-IN")}{" "}
-                                    base
-                                    {multiplier !== 1 &&
-                                      ` × ${multiplier} (${item.packageType})`}
-                                    {foodAmt > 0 &&
-                                      ` + ₹${foodAmt.toLocaleString("en-IN")} food`}
-                                    {" → "}
-                                    <span className="font-medium text-foreground">
-                                      Effective ₹{effective.toLocaleString("en-IN")}
-                                    </span>
-                                    {' × (1 + '}{item.margin}{')'}
-                                  </p> 
-                                  : <p className="mt-0.5 text-xs text-muted-foreground">
-                                    Please send photo to get the quote price
-                                  </p>}
+                                  {item.photoSent ? (
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                      ₹
+                                      {Number(item.selling).toLocaleString(
+                                        "en-IN",
+                                      )}{" "}
+                                      base
+                                      {multiplier !== 1 &&
+                                        ` × ${multiplier} (${item.packageType})`}
+                                      {foodAmt > 0 &&
+                                        ` + ₹${foodAmt.toLocaleString("en-IN")} food`}
+                                      {" → "}
+                                      <span className="font-medium text-foreground">
+                                        Effective ₹
+                                        {effective.toLocaleString("en-IN")}
+                                      </span>
+                                      {" × (1 + "}
+                                      {item.margin}
+                                      {")"}
+                                    </p>
+                                  ) : (
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                      Please send photo to get the quote price
+                                    </p>
+                                  )}
                                 </div>
                                 <span className="text-2xl font-bold text-primary">
-                                  { item.photoSent ? `₹${Number(quote).toLocaleString("en-IN")}`
-                                  : `₹X.XX`}
+                                  {item.photoSent
+                                    ? `₹${Number(quote).toLocaleString("en-IN")}`
+                                    : `₹X.XX`}
                                 </span>
                               </div>
                             </div>
@@ -1680,6 +1665,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                             }
                           >
                             <option value="">— select —</option>
+                            <option>4 Hrs &amp; 40 Kms</option>
                             <option>8 Hrs &amp; 80 Kms</option>
                             <option>12 Hrs &amp; 120 Kms</option>
                             <option>Full-day &amp; 300 Kms</option>
@@ -1703,7 +1689,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                           <input
                             disabled
                             className="ui-input h-11 cursor-not-allowed opacity-60"
-                            value={ item.photoSent ? item.selling : "X.XX"}
+                            value={item.photoSent ? item.selling : "X.XX"}
                             readOnly
                           />
                         </label>
@@ -1714,7 +1700,7 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                           <input
                             className="ui-input h-11"
                             disabled={!item.photoSent}
-                            value={ item.photoSent ? item.margin : "X.XX"}
+                            value={item.photoSent ? item.margin : "X.XX"}
                             onChange={(e) =>
                               updateItem(item.id, "margin", e.target.value)
                             }
@@ -1742,24 +1728,34 @@ const W5ProductTable = ({ onApproveRows = () => { }, onBack = () => { } }) => {
                                 <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
                                   Quote Price
                                 </p>
-                                { item.photoSent ? <p className="mt-0.5 text-xs text-muted-foreground">
-                                  ₹{Number(item.selling).toLocaleString("en-IN")}{" "}
-                                  base
-                                  {multiplier !== 1 &&
-                                    ` × ${multiplier} (${item.packageType})`}
-                                  {" → "}
-                                  <span className="font-medium text-foreground">
-                                    Effective ₹{effective.toLocaleString("en-IN")}
-                                  </span>
-                                  {' × (1 + '}{item.margin}{')'}
-                                </p>
-                                : <p className="mt-0.5 text-xs text-muted-foreground">
-                                  Please send photo to get the quote price
-                                </p>}
+                                {item.photoSent ? (
+                                  <p className="mt-0.5 text-xs text-muted-foreground">
+                                    ₹
+                                    {Number(item.selling).toLocaleString(
+                                      "en-IN",
+                                    )}{" "}
+                                    base
+                                    {multiplier !== 1 &&
+                                      ` × ${multiplier} (${item.packageType})`}
+                                    {" → "}
+                                    <span className="font-medium text-foreground">
+                                      Effective ₹
+                                      {effective.toLocaleString("en-IN")}
+                                    </span>
+                                    {" × (1 + "}
+                                    {item.margin}
+                                    {")"}
+                                  </p>
+                                ) : (
+                                  <p className="mt-0.5 text-xs text-muted-foreground">
+                                    Please send photo to get the quote price
+                                  </p>
+                                )}
                               </div>
                               <span className="text-2xl font-bold text-primary">
-                                { item.photoSent ? `₹${Number(quote).toLocaleString("en-IN")}`
-                                : `₹X.XX`}
+                                {item.photoSent
+                                  ? `₹${Number(quote).toLocaleString("en-IN")}`
+                                  : `₹X.XX`}
                               </span>
                             </div>
                           </div>

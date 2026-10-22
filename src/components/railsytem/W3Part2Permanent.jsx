@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Check, Shield } from "lucide-react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
-import { searchRecord, updateRecord } from "../../api/zohoCrm";
+import { searchRecord } from "../../api/zohoCrm";
 import { sendPermanentBodyguardTemplate } from "../../api/sendTemplate";
-import Loader from "../Loader";
+import Loader from "../ui/Loader";
 import { toast } from "sonner";
-import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
+import useSaveLead from "../../hooks/useSaveLead";
 
 const isPermanentProduct = (product) => {
   const value = product?.isPermanent ?? product?.Is_Permanent;
@@ -106,7 +106,8 @@ const W3Part2Permanent = ({
   onContinue = () => {},
   onBack = () => {},
 }) => {
-  const { leadRecord, fetchLeadRecord, currentUser, setLeadRecord } = useZohoCrm();
+  const { leadRecord } = useZohoCrm();
+  const saveLead = useSaveLead();
   const [stageLoading, setStageLoading] = useState(false);
   const [products, setProducts] = useState([]);
   const [isFetching, setIsFetching] = useState(false);
@@ -232,37 +233,22 @@ const W3Part2Permanent = ({
         ...selectedProducts.map((product) => product.id),
       ];
 
-      await updateRecord("Leads", leadRecord.id, {
+      const fields = {
         Permanent_Sent_Template: permanentSentTemplate.join(","),
         Permanent_Template_Sent: true,
+      };
+      await saveLead({
+        fields,
+        log: {
+          stage: leadRecord?.Rail_Stage || "",
+          action: "Permanent Template Sent",
+          details: {
+            Permanent_Sent_Template: permanentSentTemplate,
+            Permanent_Template_Sent: true,
+          },
+        },
+        sync: "local",
       });
-
-      try {
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Action: "Permanent Template Sent",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
-                Permanent_Sent_Template: permanentSentTemplate,
-                Permanent_Template_Sent: true,
-              }),
-            },
-          ],
-        });
-      } catch (error) {
-        console.log(JSON.stringify(error));
-      }
-      setLeadRecord(leadRecord => ({
-        ...leadRecord,
-        Permanent_Sent_Template: permanentSentTemplate.join(","),
-        Permanent_Template_Sent: true,
-      }));
       setTemplateSent(true);
       toast.success(
         selectedProducts.length === 1
@@ -280,7 +266,7 @@ const W3Part2Permanent = ({
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (selectedProducts.length === 0) {
       toast.error("Select at least one bodyguard preview to continue");
       return;
@@ -295,42 +281,29 @@ const W3Part2Permanent = ({
     }
 
     setStageLoading(true);
-    //TODO: Add the bodyguard preview images to the lead record
-    updateRecord("Leads", leadRecord.id, {
-      Rail_Stage: "3.5",
-      Lead_Status: "Permanent Template Sent",
-    })
-      .then(async () => {
-        try {
-          await addAndUpdateLogs({
-            Name: leadRecord?.Last_Name || "Unknown",
-            Lead_ID: leadRecord?.id,
-            Mobile: leadRecord?.Mobile || "none",
-            RailLog_Owner: currentUser?.id || "Unknown",
-            Logs: [
-              {
-                Agent: currentUser?.id || "Unknown",
-                Rail_Stage: "3.5",
-                Action: "Permanent Template Sent Saved",
-                Timestamp: new Date().toISOString(),
-                Data_Details: JSON.stringify({
-                  Rail_Stage: "3.5",
-                }),
-              },
-            ],
-          });
-        } catch (error) {
-          console.log(JSON.stringify(error));
-        }
-        onContinue();
-      })
-      .catch((error) => {
-        console.error("Failed to set rail stage 3.5:", error);
-        toast.error("Failed to set rail stage 3.5");
-      })
-      .finally(() => {
-        setStageLoading(false);
+    try {
+      await saveLead({
+        fields: {
+          Rail_Stage: "3.5",
+          Lead_Status: "Permanent Template Sent",
+        },
+        log: {
+          stage: "3.5",
+          action: "Permanent Template Sent Saved",
+          details: {
+            Rail_Stage: "3.5",
+            Lead_Status: "Permanent Template Sent",
+          },
+        },
+        sync: "local",
       });
+      onContinue();
+    } catch (error) {
+      console.error("Failed to set rail stage 3.5:", error);
+      toast.error("Failed to set rail stage 3.5");
+    } finally {
+      setStageLoading(false);
+    }
   };
 
   const showLoader = stageLoading || isSending;
@@ -448,6 +421,7 @@ const W3Part2Permanent = ({
               onClick={handleSendTemplate}
               disabled={
                 isSending ||
+                stageLoading ||
                 isFetching ||
                 selectedIds.size === 0 ||
                 !leadRecord?.Mobile
@@ -463,15 +437,21 @@ const W3Part2Permanent = ({
             <button
               type="button"
               onClick={handleContinue}
-              disabled={!templateSent || ifNewTemplateSelected}
+              disabled={
+                stageLoading ||
+                isSending ||
+                !templateSent ||
+                ifNewTemplateSelected
+              }
               className="btn-primary min-h-12 min-w-52 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Continue
+              {stageLoading ? "Saving..." : "Continue"}
             </button>
             <button
               type="button"
               onClick={onBack}
-              className="btn-secondary min-h-12 min-w-28"
+              disabled={stageLoading || isSending}
+              className="btn-secondary min-h-12 min-w-28 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Back
             </button>

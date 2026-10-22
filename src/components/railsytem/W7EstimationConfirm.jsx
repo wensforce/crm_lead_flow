@@ -14,13 +14,14 @@ import {
   Link,
 } from "lucide-react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
-import { getRecord, updateRecord } from "../../api/zohoCrm";
+import { getRecord } from "../../api/zohoCrm";
+import useSaveLead from "../../hooks/useSaveLead";
 import sendTemplateMessage from "../../api/sendTemplate";
-import Loader from "../Loader";
+import Loader from "../ui/Loader";
 import SalesApprovalPending from "./SalesApprovalPending";
 import SalesApprovedSummary from "./SalesApprovedSummary";
-import DelayMinutesModal from "../DelayMinutesModal";
-import ConfirmNavigateModal from "../ConfirmNavigateModal";
+import DelayMinutesModal from "../ui/DelayMinutesModal";
+import ConfirmNavigateModal from "../ui/ConfirmNavigateModal";
 import { toast } from "sonner";
 import { ADDON_PRICES } from "../../config/pricing";
 import {
@@ -33,7 +34,6 @@ import {
   serializeAdditionalServicesString,
 } from "../../utils/addonServices";
 import EditableAddonServicesList from "./EditableAddonServicesList";
-import addAndUpdateLogs from "../../utils/addAndUpdateLogs";
 
 const toInt = (value) => {
   const number = Number(value);
@@ -197,8 +197,8 @@ const EstimationConfirm = ({
   onBack = () => {},
   onGoToUpdateTable = () => {},
 }) => {
-  const { leadRecord, currentUser, fetchLeadRecord, setLeadRecord } =
-    useZohoCrm();
+  const { leadRecord, currentUser } = useZohoCrm();
+  const saveLead = useSaveLead();
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [isEditingMargins, setIsEditingMargins] = useState(false);
   const [editableBodyguardRows, setEditableBodyguardRows] = useState([]);
@@ -751,27 +751,15 @@ const EstimationConfirm = ({
         payload.Service_End_Date_And_Time = serviceEndDateTime;
       }
 
-      await updateRecord("Leads", leadRecord?.id, payload);
-      await fetchLeadRecord(leadRecord?.id);
-      try {
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "7",
-              Action: "Approved Saved",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify(payload),
-            },
-          ],
-        });
-      } catch (error) {
-        console.log(JSON.stringify(error));
-      }
+      await saveLead({
+        fields: payload,
+        log: {
+          stage: "7",
+          action: "Approved Saved",
+          details: payload,
+        },
+        sync: "refetch",
+      });
       setIsEditingMargins(false);
       setInitialPackageMargin(packageMargin);
       setInitialEstimationDays(effectiveEstimationDays);
@@ -815,38 +803,22 @@ const EstimationConfirm = ({
 
     setIsDelaying(true);
     try {
-      await updateRecord("Leads", leadRecord.id, {
-        Estimate_Deadline_At: nextDeadlineValue,
+      await saveLead({
+        fields: { Estimate_Deadline_At: nextDeadlineValue },
+        log: {
+          stage: "7",
+          action: "Estimate Deadline Delayed",
+          details: {
+            Delayed_By: minutes,
+            Estimate_Deadline_At: nextDeadlineValue,
+          },
+        },
+        sync: "local",
       });
-      try {
-        await addAndUpdateLogs({
-          Name: leadRecord?.Last_Name || "Unknown",
-          Lead_ID: leadRecord?.id,
-          Mobile: leadRecord?.Mobile || "none",
-          RailLog_Owner: currentUser?.id || "Unknown",
-          Logs: [
-            {
-              Agent: currentUser?.id || "Unknown",
-              Rail_Stage: "7",
-              Action: "Estimate Deadline Delayed",
-              Timestamp: new Date().toISOString(),
-              Data_Details: JSON.stringify({
-                Delayed_By: minutes,
-                Estimate_Deadline_At: nextDeadlineValue,
-              }),
-            },
-          ],
-        });
-      } catch (error) {
-        console.log(JSON.stringify(error));
-      }
 
       setDeadlineAtMs(nextDeadlineMs);
       setSecondsLeft(secondsUntil(nextDeadlineMs));
       setApprovalState("pending");
-      setLeadRecord?.((prev) =>
-        prev ? { ...prev, Estimate_Deadline_At: nextDeadlineValue } : prev,
-      );
       setIsDelayModalOpen(false);
       toast.success(`Deadline extended by ${minutes} minutes`);
       onDelay(minutes, nextDeadlineValue);
