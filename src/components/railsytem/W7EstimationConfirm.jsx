@@ -4,14 +4,12 @@ import {
   Shield,
   Car,
   MapPin,
-  Mic,
   Package,
   CheckCircle2,
   XCircle,
   Pencil,
   Clock3,
   PauseCircle,
-  Link,
 } from "lucide-react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
 import { getRecord } from "../../api/zohoCrm";
@@ -34,6 +32,7 @@ import {
   serializeAdditionalServicesString,
 } from "../../utils/addonServices";
 import EditableAddonServicesList from "./EditableAddonServicesList";
+import LeadAudioAttachments from "./LeadAudioAttachments";
 
 const toInt = (value) => {
   const number = Number(value);
@@ -220,7 +219,6 @@ const EstimationConfirm = ({
   const [isDelayModalOpen, setIsDelayModalOpen] = useState(false);
   const [isDelaying, setIsDelaying] = useState(false);
   const [isUpdateTableModalOpen, setIsUpdateTableModalOpen] = useState(false);
-  const [exotelRecordingUrl, setExotelRecordingUrl] = useState("");
   const [estimationDays, setEstimationDays] = useState(1);
   const [initialEstimationDays, setInitialEstimationDays] = useState(1);
   const estimationDaysEditedRef = useRef(false);
@@ -244,14 +242,6 @@ const EstimationConfirm = ({
   const isOpenPackageEstimation = useMemo(() => {
     return toBooleanFlag(leadRecord?.Open_Package_Estimation);
   }, [leadRecord?.Open_Package_Estimation]);
-
-  const convertZohoWorkDriveURL = (url) => {
-    if (!url) return "";
-    const id = String(url).split("https://workdrive.zoho.in/file/")[1];
-    setExotelRecordingUrl(
-      `https://download-accl.zoho.in/v1/workdrive/previewdata/${id}`,
-    );
-  };
 
   useEffect(() => {
     if (!packageRecordId) {
@@ -360,8 +350,6 @@ const EstimationConfirm = ({
       setSecondsLeft(0);
       return;
     }
-
-    convertZohoWorkDriveURL(callRecordingUrl2);
 
     const tick = () => {
       const left = secondsUntil(deadlineAtMs);
@@ -831,9 +819,6 @@ const EstimationConfirm = ({
   };
 
   const additionalServices = editableAddonServices;
-
-  const callRecordingUrl = leadRecord?.Recording_URL_2 || "";
-  const callRecordingUrl2 = leadRecord?.Exo_Call_Recording_URL || "";
 
   const leadOwner =
     leadRecord?.Owner?.name ||
@@ -1462,37 +1447,7 @@ const EstimationConfirm = ({
             </div>
           )}
 
-          <div className="rounded-xl border border-border bg-card p-4 md:p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Call Recording (Audio)
-            </p>
-            {callRecordingUrl && (
-              <div className="mt-3">
-                <div className="space-y-2">
-                  <div className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Mic size={16} /> Recording attached
-                  </div>
-                  <audio controls src={callRecordingUrl} className="w-full" />
-                  <a className="text-sm inline-flex items-center gap-2 underline text-blue-500" href={callRecordingUrl} target="_blank" rel="noopener noreferrer"> <Link size={16} /> Open Recording</a>
-                </div>
-              </div>
-            )}
-            {callRecordingUrl2 && (
-              <div className="mt-3">
-                <div className="space-y-2">
-                  <div className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Mic size={16} /> Recording attached
-                  </div>
-                  <audio controls src={exotelRecordingUrl} className="w-full" />
-                </div>
-              </div>
-            )}
-            {!callRecordingUrl && !callRecordingUrl2 && (
-              <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                <Mic size={16} /> Recording not available
-              </div>
-            )}
-          </div>
+          <LeadAudioAttachments leadId={leadRecord?.id} />
 
           <div className="rounded-2xl border border-border bg-white px-6 py-5 md:px-8 md:py-6">
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">

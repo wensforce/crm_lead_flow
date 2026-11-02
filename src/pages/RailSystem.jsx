@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, MessageCircle, PanelLeft, Phone } from "lucide-react";
+import { Images, Loader2, MessageCircle, PanelLeft, Phone } from "lucide-react";
 import { useZohoCrm } from "../context/ZohoCrmContext";
 import W0TheLeadRecord from "../components/railsytem/W0TheLeadRecord";
 import W1PitchLanguage from "../components/railsytem/W1PitchLanguage";
@@ -20,6 +20,7 @@ import W99LastScreen from "../components/railsytem/W99LastScreen";
 import NotASalesCall from "../components/railsytem/NotASalesCall";
 import JournyProgress from "../components/ui/JournyProgress";
 import OpenCanvas from "../components/ui/OpenCanvas";
+import MediaUploadDrawer from "../components/ui/MediaUploadDrawer";
 import Loader from "../components/ui/Loader";
 import { connectToCustomer } from "../api/zohoCrm";
 import { toast } from "sonner";
@@ -98,6 +99,7 @@ const RailSystem = () => {
   const [w11ReturnStep, setW11ReturnStep] = useState(2);
   const [selectedServices, setSelectedServices] = useState([]);
   const [canvasOpen, setCanvasOpen] = useState(false);
+  const [mediaDrawerOpen, setMediaDrawerOpen] = useState(false);
   const [connectToCustomerLoading, setConnectToCustomerLoading] = useState(false);
 
 
@@ -357,11 +359,26 @@ const RailSystem = () => {
 
   return (
     <main className="relative flex min-h-screen bg-background text-foreground">
-      <OpenCanvas open={canvasOpen} onClose={() => setCanvasOpen(false)} />
+      <OpenCanvas
+        open={canvasOpen}
+        onClose={() => setCanvasOpen(false)}
+        onSendTemplate={() => {
+          setMediaDrawerOpen(false);
+          setCanvasOpen(true);
+        }}
+      />
+      <MediaUploadDrawer
+        open={mediaDrawerOpen}
+        onClose={() => setMediaDrawerOpen(false)}
+        onOpenDoubleTick={() => {
+          setMediaDrawerOpen(false);
+          setCanvasOpen(true);
+        }}
+      />
 
       <div className="relative min-w-0 flex-1 transition-[width] duration-300 ml-0 mr-auto ">
         {!canvasOpen && (
-          <div className="sticky top-0 z-30 flex gap-2 px-4 pt-4 md:px-8">
+          <div className="sticky top-0 z-30 flex flex-wrap gap-2 px-4 pt-4 md:px-8">
             <button
               type="button"
               onClick={() => setCanvasOpen(true)}
@@ -371,6 +388,15 @@ const RailSystem = () => {
               <MessageCircle className="h-4 w-4" />
               
               <span>Open DoubleTick</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMediaDrawerOpen(true)}
+              aria-label="Send media"
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-3 text-xs font-medium text-foreground shadow-soft transition hover:bg-secondary hover:scale-95 duration-300 cursor-pointer"
+            >
+              <Images className="h-4 w-4" />
+              <span>Send Media</span>
             </button>
             <button
               type="button"

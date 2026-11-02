@@ -90,6 +90,102 @@ export function attachFile(entity, recordId, file, fileName) {
   }).then(unwrap);
 }
 
+function isEmptyRelatedList(err) {
+  const code = err?.data?.[0]?.code || err?.code;
+  return code === "NO_CONTENT" || code === "NO_DATA" || err?.status === 204;
+}
+
+function recordsFromRelatedResponse(res) {
+  if (Array.isArray(res)) return res;
+  if (Array.isArray(res?.data)) return res.data;
+  return [];
+}
+
+// ---- GET one page of a related list (Attachments, Notes, …) ----
+export function getRelatedRecords(
+  entity,
+  recordId,
+  relatedList,
+  { page = 1, perPage = 200 } = {},
+) {
+  return window.ZOHO.CRM.API.getRelatedRecords({
+    Entity: entity,
+    RecordID: recordId,
+    RelatedList: relatedList,
+    page,
+    per_page: perPage,
+  })
+    .then((res) => ({
+      records: recordsFromRelatedResponse(res),
+      more: Boolean(res?.info?.more_records),
+    }))
+    .catch((err) => {
+      if (isEmptyRelatedList(err)) return { records: [], more: false };
+      console.error("getRelatedRecords failed:", err);
+      throw err;
+    });
+}
+
+// ---- GET every attachment on a record (paged) ----
+export async function getAttachments(entity, recordId) {
+  if (!recordId) return [];
+
+  const all = [];
+  for (let page = 1; page <= 10; page += 1) {
+    const result = await getRelatedRecords(entity, recordId, "Attachments", {
+      page,
+      perPage: 200,
+    });
+    all.push(...result.records);
+    if (!result.more) break;
+  }
+  return all;
+}
+
+// Widget getFile resolves with a binary string (or a Blob). A JS string passed
+// straight into Blob() is UTF-8 encoded and corrupts audio bytes.
+function bytesFromBinaryString(value) {
+  const bytes = new Uint8Array(value.length);
+  for (let i = 0; i < value.length; i += 1) {
+    bytes[i] = value.charCodeAt(i) & 0xff;
+  }
+  return bytes;
+}
+
+function blobFromFilePayload(data) {
+  const raw =
+    data &&
+    typeof data === "object" &&
+    !(data instanceof Blob) &&
+    !ArrayBuffer.isView(data) &&
+    "data" in data
+      ? data.data
+      : data;
+
+  if (!raw) return null;
+  if (raw instanceof Blob) return raw;
+  if (raw instanceof ArrayBuffer) return new Blob([raw]);
+  if (ArrayBuffer.isView(raw)) {
+    return new Blob([
+      raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
+    ]);
+  }
+  if (typeof raw === "string") return new Blob([bytesFromBinaryString(raw)]);
+  if (typeof raw.arrayBuffer === "function") {
+    return raw.arrayBuffer().then((buffer) => new Blob([buffer]));
+  }
+  return null;
+}
+
+// ---- DOWNLOAD an attachment. id is the attachment $file_id. ----
+export function getFile(fileId) {
+  return window.ZOHO.CRM.API.getFile({ id: fileId }).then((data) => {
+    const blob = blobFromFilePayload(data);
+    if (!blob) throw new Error("Zoho did not return file bytes");
+    return blob;
+  });
+}
+
 // ---- SEARCH records (e.g. find by phone/email before inserting, avoid duplicates) ----
 export function searchRecord(entity, criteria) {
   // criteria example: "(Email:equals:test@example.com)"

@@ -2,7 +2,11 @@ import React from "react";
 import { X } from "lucide-react";
 import { useZohoCrm } from "../../context/ZohoCrmContext";
 
-const OpenCanvas = ({ open = false, onClose = () => {} }) => {
+const OpenCanvas = ({
+  open = false,
+  onClose = () => {},
+  onSendTemplate = () => {},
+}) => {
   const { leadRecord } = useZohoCrm();
   const leadPhone = leadRecord?.Mobile || "+91 98765 43210";
 
@@ -38,16 +42,25 @@ const OpenCanvas = ({ open = false, onClose = () => {} }) => {
             ${open ? "pointer-events-auto" : "pointer-events-none"}
           `}
         >
-          <header className="flex items-center justify-between border-b border-border px-4 py-3">
+          <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
             <h2 className="text-sm font-semibold text-foreground">Canvas</h2>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close canvas"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background text-foreground hover:bg-secondary"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onSendTemplate}
+                className="inline-flex h-8 items-center rounded-lg border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-secondary"
+              >
+                Chat Initiat
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close canvas"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background text-foreground hover:bg-secondary"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </header>
           <div className="flex h-full flex-1 items-center justify-center bg-card">
             <iframe
